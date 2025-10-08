@@ -25,16 +25,17 @@ if DEMUCS_ENV_PATH.exists() and DEMUCS_PYTHON.exists():
     DEMUCS_COMMAND = str(DEMUCS_PYTHON)
     print(f"✅ Local Demucs environment found: {DEMUCS_ENV_PATH}")
 else:
-    # Check for system demucs installation
-    if shutil.which("python3") and shutil.which("demucs"):
+    # Check for system/venv demucs installation
+    demucs_path = shutil.which("demucs")
+    if demucs_path:
         DEMUCS_AVAILABLE = True
-        DEMUCS_COMMAND = "python3"
-        print("✅ System Demucs installation found")
+        DEMUCS_COMMAND = "demucs"  # Use demucs command directly
+        print(f"✅ Demucs installation found: {demucs_path}")
     else:
         DEMUCS_AVAILABLE = False
-        print("❌ CRITICAL: Demucs not available!")
-        print("Demucs stem separation is mandatory for this application!")
-        raise ImportError("Demucs is required for stem separation. Please install Demucs.")
+        print("❌ WARNING: Demucs not available!")
+        print("Install with: pip install demucs")
+        # Don't raise error at import time - let it fail gracefully later if needed
 
 # Import the correct model
 try:
@@ -241,11 +242,20 @@ class AudioProcessingPipeline:
 
                 # Run Demucs separation via subprocess
                 logger.info("🔄 Running Demucs stem separation via subprocess...")
-                cmd = [
-                    DEMUCS_COMMAND, "-m", "demucs.separate",
-                    "--out", str(temp_path),
-                    str(input_file)
-                ]
+                if DEMUCS_COMMAND == "demucs":
+                    # Use direct demucs command
+                    cmd = [
+                        DEMUCS_COMMAND,
+                        "-o", str(temp_path),
+                        str(input_file)
+                    ]
+                else:
+                    # Use python -m demucs.separate for custom env
+                    cmd = [
+                        DEMUCS_COMMAND, "-m", "demucs.separate",
+                        "--out", str(temp_path),
+                        str(input_file)
+                    ]
 
                 logger.info(f"Running command: {' '.join(cmd)}")
 
@@ -254,7 +264,6 @@ class AudioProcessingPipeline:
                     cmd,
                     capture_output=True,
                     text=True,
-                    cwd=str(DEMUCS_ENV_PATH.parent),  # Set working directory
                     timeout=900  # 15 minute timeout
                 )
 
@@ -346,7 +355,11 @@ class AudioProcessingPipeline:
             logger.info("🔄 Testing Demucs installation...")
 
             # Test command
-            cmd = [DEMUCS_COMMAND, "-m", "demucs.separate", "--help"]
+            if DEMUCS_COMMAND == "demucs":
+                cmd = [DEMUCS_COMMAND, "--help"]
+            else:
+                cmd = [DEMUCS_COMMAND, "-m", "demucs.separate", "--help"]
+
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
 
             if result.returncode == 0:

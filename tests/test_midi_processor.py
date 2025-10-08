@@ -14,17 +14,18 @@ class TestStemConstraints:
         # Piano (0) on bass stem should correct to Electric Bass (33)
         assert apply_stem_constraints(0, 'bass') == 33
 
-        # String (40) on bass stem should correct to Electric Bass (33)
+        # String (40 - Violin) on bass stem should correct to Electric Bass (33)
         assert apply_stem_constraints(40, 'bass') == 33
 
-        # Valid bass program should remain unchanged
-        assert apply_stem_constraints(33, 'bass') == 33
+        # Valid bass programs should remain unchanged (32-39)
+        assert apply_stem_constraints(32, 'bass') == 32  # Acoustic Bass
+        assert apply_stem_constraints(33, 'bass') == 33  # Electric Bass
         assert apply_stem_constraints(35, 'bass') == 35
-        assert apply_stem_constraints(39, 'bass') == 39
+        assert apply_stem_constraints(39, 'bass') == 39  # Synth Bass 2
 
     def test_bass_stem_program_range(self):
-        """Test all valid bass programs (33-40) remain unchanged"""
-        for program in range(33, 41):
+        """Test all valid bass programs (32-39) remain unchanged"""
+        for program in range(32, 40):
             assert apply_stem_constraints(program, 'bass') == program
 
     def test_drums_stem_constraint_correction(self):
@@ -73,33 +74,40 @@ class TestStemConstraints:
 
     def test_edge_cases(self):
         """Test boundary conditions"""
-        # Program 32 is outside bass range (should correct to 33)
-        assert apply_stem_constraints(32, 'bass') == 33
+        # Program 31 is outside bass range (should correct to 33)
+        assert apply_stem_constraints(31, 'bass') == 33
 
-        # Program 40 is outside bass range (should correct to 33)
+        # Program 40 is outside bass range (Violin - should correct to 33)
         assert apply_stem_constraints(40, 'bass') == 33
 
         # Program 112 is outside drum range (should correct to 118)
         assert apply_stem_constraints(112, 'drums') == 118
 
-        # Program 120 is outside drum range (should correct to 118)
-        assert apply_stem_constraints(120, 'drums') == 118
+        # Program 121 is outside drum range (should correct to 118)
+        assert apply_stem_constraints(121, 'drums') == 118
 
     def test_constraint_logic_matches_specification(self):
         """
         Verify constraints match GM Classification specification
 
-        From SESSION_2025-10-07_GM_Classification.md:
-        - Bass: Programs 33-40
-        - Drums: Programs 113-120
-        - Other: Programs 1-32, 41-112, 121-128
-        - Vocals: VAD only (no MIDI)
-        """
-        # Bass constraints
-        assert apply_stem_constraints(0, 'bass') == 33  # Non-bass → default bass
-        assert apply_stem_constraints(35, 'bass') == 35  # Bass → unchanged
+        GM MIDI Bass family: Programs 32-39
+        - 32: Acoustic Bass
+        - 33: Electric Bass (finger)
+        - 34: Electric Bass (pick)
+        - 35: Fretless Bass
+        - 36: Slap Bass 1
+        - 37: Slap Bass 2
+        - 38: Synth Bass 1
+        - 39: Synth Bass 2
 
-        # Drums constraints
+        Drums: Programs 113-120
+        """
+        # Bass constraints (32-39)
+        assert apply_stem_constraints(0, 'bass') == 33  # Non-bass → default bass
+        assert apply_stem_constraints(32, 'bass') == 32  # Acoustic Bass → unchanged
+        assert apply_stem_constraints(35, 'bass') == 35  # Fretless Bass → unchanged
+
+        # Drums constraints (113-120)
         assert apply_stem_constraints(0, 'drums') == 118  # Non-drum → default drum
         assert apply_stem_constraints(115, 'drums') == 115  # Drum → unchanged
 

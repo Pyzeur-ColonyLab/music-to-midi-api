@@ -125,7 +125,7 @@ class TranscriptionResponse(BaseModel):
     job_id: str
     message: str
     duration: Optional[float] = Field(default=None, description="Audio duration in seconds")
-    tempo: Optional[int] = Field(default=None, description="Detected tempo in BPM")
+    tempo: Optional[float] = Field(default=None, description="Detected tempo in BPM")
     total_beats: Optional[int] = Field(default=None, description="Number of beats detected")
     stems_processed: Optional[int] = Field(default=None, description="Number of stems processed")
     total_segments: Optional[int] = Field(default=None, description="Total audio segments analyzed")

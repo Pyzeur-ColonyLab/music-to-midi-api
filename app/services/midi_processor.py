@@ -232,7 +232,7 @@ def apply_stem_constraints(program: int, stem_type: str) -> int:
         >>> assert corrected == 33
     """
     if stem_type == 'bass':
-        # Bass stem: Programs 33-40 (GM Bass family)
+        # Bass stem: Programs 32-39 (GM Bass family)
         # If prediction is outside bass range, default to Electric Bass (finger)
         if program < 32 or program > 39:
             logger.info(f"Correcting program {program} -> 33 (Electric Bass) for bass stem")
@@ -242,7 +242,7 @@ def apply_stem_constraints(program: int, stem_type: str) -> int:
     elif stem_type == 'drums':
         # Drums stem: Programs 113-120 or is_drum=True
         # Melodic drums should be in this range
-        if program < 112 or program > 119:
+        if program < 113 or program > 120:
             # If non-drum program on drum stem, map to Synth Drum
             logger.info(f"Correcting program {program} -> 118 (Synth Drum) for drums stem")
             return 118  # Synth Drum
