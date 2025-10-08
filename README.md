@@ -190,27 +190,98 @@ See [MT3/SESSION_2025-10-07_GM_Classification.md](../MT3/SESSION_2025-10-07_GM_C
 
 ## Deployment
 
-### systemd Service (Recommended)
+### Automated Setup (Recommended)
 
+**Initial Deployment**:
 ```bash
-# Run setup script
+# On your server (Ubuntu/Debian)
+curl -fsSL https://raw.githubusercontent.com/Pyzeur-ColonyLab/music-to-midi-api/main/deploy/setup.sh | bash
+
+# Or clone first, then run
+git clone https://github.com/Pyzeur-ColonyLab/music-to-midi-api.git
+cd music-to-midi-api
 ./deploy/setup.sh
-
-# Service management
-sudo systemctl status music-to-midi-api
-sudo systemctl restart music-to-midi-api
-sudo journalctl -u music-to-midi-api -f
 ```
 
-### Docker (Alternative)
+**What setup.sh does**:
+- ✅ Installs system dependencies (Python 3.10, ffmpeg, git)
+- ✅ Creates virtual environment and installs Python packages
+- ✅ Downloads Demucs models automatically
+- ✅ Creates systemd service for auto-start
+- ✅ Configures logging to `logs/` directory
+- ✅ Starts the API service
+
+**Quick Updates**:
+```bash
+# From your Mac or server
+./deploy/update.sh
+
+# Or manually
+cd ~/music-to-midi-api
+git pull
+source venv/bin/activate
+pip install -r requirements.txt
+sudo systemctl restart music-to-midi-api
+```
+
+### Service Management
 
 ```bash
-# Build image
-docker build -t music-to-midi-api .
+# Check status
+sudo systemctl status music-to-midi-api
 
-# Run container
-docker run -p 8000:8000 -v $(pwd)/uploads:/app/uploads music-to-midi-api
+# View logs (live)
+sudo journalctl -u music-to-midi-api -f
+
+# View service logs (file)
+tail -f ~/music-to-midi-api/logs/service.log
+tail -f ~/music-to-midi-api/logs/error.log
+
+# Restart service
+sudo systemctl restart music-to-midi-api
+
+# Stop service
+sudo systemctl stop music-to-midi-api
+
+# Disable auto-start
+sudo systemctl disable music-to-midi-api
 ```
+
+### Manual Deployment
+
+If you prefer manual setup:
+
+```bash
+# Install dependencies
+sudo apt-get update
+sudo apt-get install -y python3.10 python3-pip python3-venv ffmpeg git
+
+# Clone repository
+git clone https://github.com/Pyzeur-ColonyLab/music-to-midi-api.git
+cd music-to-midi-api
+
+# Setup Python environment
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+# Download models
+python scripts/download_models.py
+
+# Run development server
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### GPU Support
+
+The service auto-detects CUDA and uses GPU if available. No configuration needed!
+
+```python
+# In app/services/model_loader.py
+device = "cuda" if torch.cuda.is_available() else "cpu"
+```
+
+Both CPU and GPU instances work with the same setup script.
 
 ## Performance
 
