@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+.tox
+.coverage
+.pytest_cache/
+*.egg-info/
+
+# Environment files
+.env
+.env.local
+.env.*
+
+# Logs
+*.log
+logs/
+
+# ML and data files
+models/
+checkpoints/
+*.pth
+*.pt
+*.ckpt
+*.h5
+*.pkl
+*.joblib
+
+# Audio files (except test samples)
+uploads/
+*.wav
+*.mp3
+*.flac
+*.m4a
+*.ogg
+!test_samples/*.wav
+!test_samples/*.mp3
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+._*
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+.temp/
+
+# FastAPI specific
+__pycache__/
+*.pyc
