@@ -62,7 +62,7 @@ music-to-midi-api/
 
 ```bash
 # Clone repository
-git clone https://github.com/YOUR_USERNAME/music-to-midi-api.git
+git clone https://github.com/Pyzeur-ColonyLab/music-to-midi-api.git
 cd music-to-midi-api
 
 # Create virtual environment
