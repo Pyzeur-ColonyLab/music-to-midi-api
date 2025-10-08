@@ -308,15 +308,35 @@ Both CPU and GPU instances work with the same setup script.
 ### Run Tests
 
 ```bash
-# All tests
-pytest
+# Quick test run
+./scripts/run_tests.sh
+
+# Or manually with pytest
+pytest tests/ -v
 
 # Specific test file
-pytest tests/test_transcription.py
+pytest tests/test_api.py -v
+
+# Specific test class
+pytest tests/test_midi_processor.py::TestStemConstraints -v
 
 # With coverage
 pytest --cov=app tests/
 ```
+
+**Available Tests**:
+- `tests/test_api.py` - API endpoint integration tests
+- `tests/test_midi_processor.py` - MIDI constraint logic tests
+- `tests/conftest.py` - Test fixtures and configuration
+
+### API Usage Examples
+
+See [docs/API_USAGE.md](docs/API_USAGE.md) for complete examples:
+- cURL commands
+- Python client
+- JavaScript/TypeScript
+- Batch processing
+- Error handling
 
 ### Code Quality
 
@@ -326,6 +346,9 @@ black app/ tests/
 
 # Lint
 flake8 app/ tests/
+
+# Type checking (if using mypy)
+mypy app/
 ```
 
 ## Documentation
