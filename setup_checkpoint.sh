@@ -19,15 +19,20 @@ if [ -d "amt" ] && [ -f "amt/logs/2024/mc13_256_g4_all_v7_mt3f_sqr_rms_moe_wf4_n
     exit 0
 fi
 
-echo "This script will download the YourMT3 checkpoint (~536MB)"
+echo "This script will setup the YourMT3 checkpoint (~536MB)"
 echo ""
 echo -e "${YELLOW}Options:${NC}"
-echo "1. Download from Hugging Face (recommended)"
-echo "2. Copy from local path (if you have it already)"
-echo "3. Skip (manual setup later)"
+echo "1. Download from Hugging Face (cloud instance)"
+echo "2. Copy from local path (if running locally)"
+echo "3. Already transferred via SCP/rsync (verify only)"
+echo "4. Skip (manual setup later)"
+echo ""
+echo -e "${YELLOW}💡 Recommended for cloud instances:${NC}"
+echo "   Transfer from your machine using:"
+echo "   scp -r amt/ user@instance:/path/to/music-to-midi-api/"
 echo ""
 
-read -p "Choose option (1-3): " choice
+read -p "Choose option (1-4): " choice
 
 case $choice in
     1)
@@ -104,12 +109,33 @@ case $choice in
 
     3)
         echo ""
-        echo -e "${YELLOW}⚠️  Skipping checkpoint download${NC}"
+        echo -e "${YELLOW}🔍 Verifying transferred checkpoint...${NC}"
+
+        if [ ! -d "amt" ]; then
+            echo -e "${RED}❌ amt/ directory not found${NC}"
+            echo ""
+            echo "Transfer the checkpoint first using:"
+            echo "  scp -r amt/ user@instance:$(pwd)/"
+            echo ""
+            exit 1
+        fi
+
+        echo -e "${GREEN}✅ amt/ directory found${NC}"
+        echo "Checkpoint will be verified below..."
+        ;;
+
+    4)
+        echo ""
+        echo -e "${YELLOW}⚠️  Skipping checkpoint setup${NC}"
         echo ""
         echo "To set up manually:"
-        echo "1. Download checkpoint from: https://huggingface.co/mimbres/YourMT3"
-        echo "2. Extract to: ./amt/"
-        echo "3. Ensure structure:"
+        echo "1. Transfer from your local machine:"
+        echo "   scp -r amt/ user@instance:$(pwd)/"
+        echo ""
+        echo "2. Or download from: https://huggingface.co/mimbres/YourMT3"
+        echo "   Extract to: ./amt/"
+        echo ""
+        echo "3. Required structure:"
         echo "   amt/"
         echo "   ├── model_helper.py"
         echo "   ├── html_helper.py"
