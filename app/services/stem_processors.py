@@ -324,8 +324,8 @@ class VocalsStemProcessor(StemProcessor):
     """
     Vocals stem processor
 
-    v1.0: Voice Activity Detection (VAD) only
-    v2.0: Speech-to-text transcription (Whisper)
+    Uses YourMT3 for MIDI transcription
+    Future: Speech-to-text transcription (Whisper)
     """
 
     def __init__(self, model: Optional[Any] = None):
@@ -334,34 +334,45 @@ class VocalsStemProcessor(StemProcessor):
 
     def process(self, audio_path: str, **kwargs) -> Dict[str, Any]:
         """
-        Process vocals stem with VAD
+        Process vocals stem with YourMT3
 
         Future versions will add speech-to-text
         """
         logger.info(f"Processing vocals stem: {audio_path}")
 
         try:
-            # v1.0: Simple VAD (actual implementation in vad.py)
-            from app.services.vad import detect_voice_activity
+            # Use YourMT3 for vocals transcription
+            job_id = kwargs.get('job_id', 'unknown')
+            output_dir = kwargs.get('output_dir', 'outputs')
+            track_name = kwargs.get('track_name', f'{job_id}_vocals')
 
-            voice_segments = detect_voice_activity(audio_path)
+            # Get YourMT3 model if not provided
+            model = self.model or get_yourmt3_model()
+
+            # Transcribe vocals to MIDI
+            midi_path, stats = transcribe_audio_to_midi(
+                audio_path=audio_path,
+                output_dir=output_dir,
+                track_name=track_name,
+                model=model
+            )
 
             result = {
-                'type': 'vad',
+                'type': 'midi',
                 'stem': 'vocals',
                 'processor': 'VocalsStemProcessor',
-                'model': 'webrtcvad',
+                'model': 'YourMT3',
                 'audio_path': audio_path,
-                'voice_active_segments': voice_segments,
-                'status': 'processed',
-                'note': 'v1.0 VAD only, v2.0 will add speech-to-text'
+                'midi_file': midi_path,
+                'transcription_stats': stats,
+                'status': 'processed'
             }
 
-            logger.info(f"Vocals stem processed successfully ({len(voice_segments)} segments)")
+            logger.info(f"✅ Vocals stem processed successfully: {midi_path}")
             return result
 
         except Exception as e:
-            logger.error(f"Vocals stem processing failed: {e}")
+            logger.error(f"❌ Vocals stem processing failed: {e}")
             raise RuntimeError(f"Vocals stem processing failed: {e}")
 
     def get_info(self) -> Dict[str, Any]:
@@ -369,9 +380,9 @@ class VocalsStemProcessor(StemProcessor):
         return {
             'stem_type': 'vocals',
             'processor': 'VocalsStemProcessor',
-            'model': 'webrtcvad',
+            'model': 'YourMT3',
             'version': '1.0',
-            'capabilities': ['voice_activity_detection'],
+            'capabilities': ['midi_transcription'],
             'future_enhancement': 'Speech-to-text transcription (Whisper)'
         }
 
