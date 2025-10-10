@@ -20,7 +20,7 @@ from app.api.models import (
     ErrorResponse
 )
 from app.services.transcription import transcribe_audio, get_transcription_stats
-from app.services.model_loader import get_model_instance
+from app.services.yourmt3_service import get_yourmt3_model
 
 logger = logging.getLogger(__name__)
 
@@ -117,11 +117,11 @@ async def predict_instruments(job_id: str, request: PredictionRequest = Predicti
         )
 
     # Verify model is loaded
-    model = get_model_instance()
+    model = get_yourmt3_model()
     if model is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Model not loaded. Service is initializing."
+            detail="YourMT3 model not loaded. Service is initializing."
         )
 
     # Progress callback to update job status
