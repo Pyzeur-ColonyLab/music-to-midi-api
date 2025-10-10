@@ -336,16 +336,192 @@ SKIP_MODEL_LOADING=1 python -m app.main
 
 ## Deployment
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for complete deployment guide including:
+### Production Instance Deployment
 
-- Production server setup (Gunicorn)
-- Nginx reverse proxy
-- SSL/TLS configuration
-- Cloud deployment (AWS, GCP, Azure, DigitalOcean)
-- Docker/Kubernetes
-- Monitoring and scaling
+Complete guide for deploying to a cloud instance (AWS, GCP, DigitalOcean, Infomaniak, etc.)
 
-Quick Docker deployment:
+#### Prerequisites
+
+**Recommended Server Specs**:
+- OS: Ubuntu 22.04 LTS
+- RAM: 16GB minimum (8GB works but slower)
+- CPU: 4+ cores
+- Disk: 20GB free space
+- Python 3.9+
+
+**Firewall Rules**:
+- **Inbound**: Port 22 (SSH, your IP only), Port 8000 (API, 0.0.0.0/0)
+- **Outbound**: All traffic allowed
+
+#### Step 1: Initial Server Setup
+
+```bash
+# Update system
+sudo apt update && sudo apt upgrade -y
+
+# Install Python and dependencies
+sudo apt install -y python3.10 python3.10-venv python3-pip git
+
+# Install system dependencies
+sudo apt install -y ffmpeg libsndfile1
+```
+
+#### Step 2: Clone Repository
+
+```bash
+# Clone from GitHub
+cd ~
+git clone https://github.com/Pyzeur-ColonyLab/music-to-midi-api.git
+cd music-to-midi-api
+```
+
+#### Step 3: Transfer YourMT3 Checkpoint
+
+**Option A: From Local Machine (Recommended)**
+
+On your local machine:
+```bash
+# Transfer checkpoint directory to instance
+scp -r amt/ ubuntu@YOUR_INSTANCE_IP:/home/ubuntu/music-to-midi-api/
+
+# Example:
+scp -r amt/ ubuntu@83.228.227.26:/home/ubuntu/music-to-midi-api/
+```
+
+**Option B: Download from Hugging Face**
+
+On the instance:
+```bash
+./setup_checkpoint.sh
+# Select option 1: "Download from Hugging Face"
+```
+
+See [TRANSFER_GUIDE.md](TRANSFER_GUIDE.md) for detailed transfer instructions.
+
+#### Step 4: Install Python Dependencies
+
+```bash
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+#### Step 5: Configure Environment
+
+```bash
+# Create .env file (optional)
+cat > .env << EOF
+PORT=8000
+HOST=0.0.0.0
+MAX_UPLOAD_SIZE_MB=500
+EOF
+```
+
+#### Step 6: Start Server
+
+**Development Mode** (auto-reload):
+```bash
+python3 -m app.main
+```
+
+**Production Mode** (recommended):
+```bash
+# Install screen for background process
+sudo apt install -y screen
+
+# Start server in screen session
+screen -S music-api
+python3 -m app.main
+
+# Detach from screen: Ctrl+A then D
+# Reattach: screen -r music-api
+```
+
+**Production with systemd** (best for production):
+
+Create service file:
+```bash
+sudo tee /etc/systemd/system/music-to-midi.service > /dev/null << EOF
+[Unit]
+Description=Music-to-MIDI API Service
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/music-to-midi-api
+Environment="PATH=/home/ubuntu/music-to-midi-api/venv/bin"
+ExecStart=/home/ubuntu/music-to-midi-api/venv/bin/python3 -m app.main
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable and start service
+sudo systemctl enable music-to-midi
+sudo systemctl start music-to-midi
+
+# Check status
+sudo systemctl status music-to-midi
+
+# View logs
+sudo journalctl -u music-to-midi -f
+```
+
+#### Step 7: Verify Deployment
+
+```bash
+# Check health
+curl http://localhost:8000/health
+
+# Should return:
+# {"status":"healthy","model_loaded":true,"device":"cpu","gpu_available":false}
+```
+
+#### Step 8: Test Complete Pipeline
+
+```bash
+# Upload test file
+curl -X POST http://YOUR_INSTANCE_IP:8000/api/v1/upload \
+  -F "file=@test.mp3"
+
+# Note the job_id from response
+
+# Start transcription
+curl -X POST http://YOUR_INSTANCE_IP:8000/api/v1/predict/JOB_ID
+
+# Check status
+curl http://YOUR_INSTANCE_IP:8000/api/v1/status/JOB_ID
+
+# Get results when completed
+curl http://YOUR_INSTANCE_IP:8000/api/v1/results/JOB_ID
+```
+
+#### Management Commands
+
+```bash
+# Stop server
+sudo systemctl stop music-to-midi
+
+# Restart server
+sudo systemctl restart music-to-midi
+
+# View logs
+sudo journalctl -u music-to-midi -f
+
+# Update code
+cd ~/music-to-midi-api
+git pull origin main
+sudo systemctl restart music-to-midi
+```
+
+### Docker Deployment
 
 ```bash
 # Build
@@ -359,6 +535,15 @@ docker run -d \
   --name music-to-midi-api \
   music-to-midi-api
 ```
+
+### Advanced Deployment
+
+For advanced production setups, see [DEPLOYMENT.md](DEPLOYMENT.md) for:
+- Nginx reverse proxy configuration
+- SSL/TLS certificates (Let's Encrypt)
+- Load balancing and scaling
+- Monitoring and alerting
+- Database integration (Redis for job queue)
 
 ---
 
