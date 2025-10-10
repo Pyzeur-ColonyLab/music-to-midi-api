@@ -3,10 +3,26 @@ Services layer for Music-to-MIDI API
 Business logic and orchestration
 """
 
-from .model_loader import load_yourmt3_model, get_model_instance, get_model_info
-from .transcription import transcribe_audio, transcribe_with_stems, get_transcription_stats
-from .midi_processor import analyze_midi, midi_to_json, apply_stem_constraints
-from .stem_separator import separate_stems, cleanup_stems, get_available_models
+# YourMT3 integration
+from .yourmt3_service import (
+    load_yourmt3,
+    get_yourmt3_model,
+    transcribe_audio_to_midi,
+    get_model_info,
+    unload_model
+)
+
+# Demucs stem separation
+from .demucs_separator import (
+    load_demucs_model,
+    get_demucs_model,
+    separate_stems
+)
+
+# Transcription pipeline
+from .transcription import transcribe_audio
+
+# Stem processors
 from .stem_processors import (
     StemProcessor,
     BassStemProcessor,
@@ -15,25 +31,20 @@ from .stem_processors import (
     VocalsStemProcessor,
     create_stem_processor
 )
-from .vad import detect_voice_activity, get_vad_statistics, filter_short_segments
 
 __all__ = [
-    # Model management
-    'load_yourmt3_model',
-    'get_model_instance',
+    # YourMT3 model management
+    'load_yourmt3',
+    'get_yourmt3_model',
+    'transcribe_audio_to_midi',
     'get_model_info',
+    'unload_model',
+    # Demucs stem separation
+    'load_demucs_model',
+    'get_demucs_model',
+    'separate_stems',
     # Transcription
     'transcribe_audio',
-    'transcribe_with_stems',
-    'get_transcription_stats',
-    # MIDI processing
-    'analyze_midi',
-    'midi_to_json',
-    'apply_stem_constraints',
-    # Stem separation
-    'separate_stems',
-    'cleanup_stems',
-    'get_available_models',
     # Stem processors
     'StemProcessor',
     'BassStemProcessor',
@@ -41,8 +52,4 @@ __all__ = [
     'OtherStemProcessor',
     'VocalsStemProcessor',
     'create_stem_processor',
-    # Voice Activity Detection
-    'detect_voice_activity',
-    'get_vad_statistics',
-    'filter_short_segments'
 ]
