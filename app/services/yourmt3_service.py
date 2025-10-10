@@ -231,8 +231,11 @@ def transcribe_audio_to_midi(
                     raise RuntimeError(f"Could not read audio file {audio_path}: {str(e)}")
 
         # Prepare audio info dict for YourMT3 transcribe function
+        # IMPORTANT: Use absolute path because we'll change working directory
+        absolute_audio_path = os.path.abspath(audio_path)
+
         audio_info = {
-            "filepath": audio_path,
+            "filepath": absolute_audio_path,
             "track_name": track_name,
             "sample_rate": info.sample_rate,
             "num_frames": info.num_frames,
