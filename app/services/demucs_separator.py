@@ -4,6 +4,7 @@ Separates audio into stems (bass, drums, other, vocals) using Demucs
 """
 
 import os
+import time
 import logging
 import torch
 import torchaudio
@@ -201,6 +202,16 @@ def separate_stems(
 
             stem_paths[stem_name] = stem_path
             logger.info(f"   ✅ Saved {stem_name} stem: {stem_path}")
+
+        # Ensure all files are fully written to disk
+        time.sleep(0.2)  # Small delay to ensure filesystem flush
+
+        # Verify all stem files are readable
+        for stem_name, stem_path in stem_paths.items():
+            if not os.path.exists(stem_path):
+                raise RuntimeError(f"Stem file not found after save: {stem_path}")
+            if os.path.getsize(stem_path) == 0:
+                raise RuntimeError(f"Stem file is empty: {stem_path}")
 
         logger.info(f"✅ Stem separation complete: {len(stem_paths)} stems")
         return stem_paths

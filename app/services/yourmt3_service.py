@@ -5,6 +5,7 @@ Handles model loading and MIDI transcription using YourMT3
 
 import os
 import sys
+import time
 from pathlib import Path
 import torch
 import torchaudio
@@ -201,8 +202,33 @@ def transcribe_audio_to_midi(
     logger.info(f"   Output: {output_dir}/{track_name}.mid")
 
     try:
-        # Get audio info
-        info = torchaudio.info(audio_path)
+        # Get audio info with retry logic (file might not be fully flushed to disk)
+        max_retries = 3
+        retry_delay = 0.5  # seconds
+
+        for attempt in range(max_retries):
+            try:
+                # Ensure file exists and is readable
+                if not os.path.exists(audio_path):
+                    raise FileNotFoundError(f"Audio file not found: {audio_path}")
+
+                if os.path.getsize(audio_path) == 0:
+                    raise ValueError(f"Audio file is empty: {audio_path}")
+
+                # Try to get audio info
+                info = torchaudio.info(audio_path)
+                logger.info(f"✅ Audio info retrieved: {info.sample_rate}Hz, {info.num_frames} frames, {info.num_channels} channels")
+                break
+
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    logger.warning(f"⚠️ Attempt {attempt + 1}/{max_retries} failed to read {audio_path}: {e}")
+                    logger.warning(f"   Retrying in {retry_delay}s...")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    logger.error(f"❌ Failed to read audio file after {max_retries} attempts: {audio_path}")
+                    raise RuntimeError(f"Could not read audio file {audio_path}: {str(e)}")
 
         # Prepare audio info dict for YourMT3 transcribe function
         audio_info = {
