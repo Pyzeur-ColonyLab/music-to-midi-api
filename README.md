@@ -1,370 +1,441 @@
-# Music-to-MIDI API Service
+# Music-to-MIDI API
 
-Production API service for audio-to-MIDI transcription using YourMT3 with stem-based processing.
+AI-powered audio-to-MIDI transcription service using YourMT3 and Demucs for professional music production.
+
+[![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)](https://fastapi.tiangolo.com/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+---
 
 ## Overview
 
-Convert audio files (mp3, wav, flac, m4a) to MIDI files with optional stem-based processing for improved accuracy.
+Transform audio files into MIDI with high accuracy using state-of-the-art deep learning models:
+
+- **YourMT3**: Advanced audio-to-MIDI transcription (536M parameters)
+- **Demucs**: Professional stem separation (bass, drums, other, vocals)
+- **FastAPI**: Production-ready REST API with async processing
 
 ### Features
 
-- **Direct transcription**: Single-pass YourMT3 transcription (~30s for 3min audio)
-- **Stem-based transcription**: Demucs separation → per-stem processing (~90s for 3min audio)
-  - Bass stem: YourMT3 MIDI transcription
-  - Other stem: YourMT3 MIDI transcription
-  - Drums stem: YourMT3 MIDI transcription
-  - Vocals stem: Voice activity detection (VAD)
-- **3-Stem Specialized Models**: 24 instrument classes across bass, drums, other stems
-  - Bass: 99% accuracy (8 classes)
-  - Drums: 98% accuracy (8 classes)
-  - Other: 84% accuracy (8 classes)
+✨ **Multi-Stem Processing**
+- Automatic 4-stem separation (bass, drums, other, vocals)
+- Independent MIDI generation per stem
+- General MIDI (GM) instrument program assignment
+
+🎯 **High Accuracy**
+- YourMT3 YPTF.MoE+Multi model
+- Multi-instrument polyphonic transcription
+- Percussion and pitch-based instrument support
+
+⚡ **Production Ready**
+- RESTful API with comprehensive documentation
+- Docker support for easy deployment
+- Health checks and monitoring
+- GPU acceleration support
+
+---
+
+## Quick Start
+
+### Prerequisites
+
+- Python 3.9+
+- 8GB+ RAM (16GB recommended)
+- 10GB disk space
+- (Optional) NVIDIA GPU with CUDA
+
+### Installation
+
+```bash
+# 1. Clone repository
+git clone https://github.com/yourusername/music-to-midi-api.git
+cd music-to-midi-api
+
+# 2. Download YourMT3 checkpoint (~536MB)
+./setup_checkpoint.sh
+
+# 3. Create virtual environment
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# 4. Install dependencies
+pip install -r requirements.txt
+
+# 5. Start server
+python -m app.main
+```
+
+### Docker
+
+```bash
+# Download checkpoint first
+./setup_checkpoint.sh
+
+# Start with Docker Compose
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+```
+
+Server available at: **http://localhost:8000**
+
+API Documentation: **http://localhost:8000/docs**
+
+---
+
+## Usage
+
+### Upload Audio
+
+```bash
+curl -X POST http://localhost:8000/api/v1/upload \
+  -F "file=@song.mp3"
+```
+
+Response:
+```json
+{
+  "job_id": "abc-123-def-456",
+  "message": "File uploaded successfully",
+  "filename": "song.mp3",
+  "file_size": 5242880,
+  "created_at": "2025-10-09T10:30:00"
+}
+```
+
+### Start Processing
+
+```bash
+curl -X POST http://localhost:8000/api/v1/predict/abc-123-def-456
+```
+
+### Check Status
+
+```bash
+curl http://localhost:8000/api/v1/status/abc-123-def-456
+```
+
+Response:
+```json
+{
+  "job_id": "abc-123-def-456",
+  "status": "processing",
+  "progress": 45,
+  "message": "Transcribing drums stem to MIDI..."
+}
+```
+
+### Get Results
+
+```bash
+curl http://localhost:8000/api/v1/results/abc-123-def-456
+```
+
+Response:
+```json
+{
+  "job_id": "abc-123-def-456",
+  "stems": {
+    "bass": {
+      "midi_path": "/path/to/abc-123-def-456_bass.mid",
+      "midi_url": "/api/v1/files/abc-123-def-456_bass.mid",
+      "program_range": [33, 40],
+      "status": "processed"
+    },
+    "drums": { ... },
+    "other": { ... },
+    "vocals": { ... }
+  },
+  "processing_summary": {
+    "stems_processed": 4,
+    "total_midi_files": 4,
+    "model": "YourMT3 (YPTF.MoE+Multi, 536M params)"
+  }
+}
+```
+
+### Download MIDI
+
+```bash
+curl -O http://localhost:8000/api/v1/files/abc-123-def-456_bass.mid
+```
+
+---
 
 ## Architecture
 
-### Technology Stack
+### Processing Pipeline
 
-- **Framework**: FastAPI (async, auto-documented, Pydantic validation)
-- **Model**: YourMT3 - YPTF.MoE+Multi (noPS) 536M parameters
-- **Stem Separation**: Demucs htdemucs (4-stem)
-- **MIDI Processing**: pretty_midi
-- **Deployment**: Docker with NVIDIA CUDA base (GPU/CPU compatible)
+```
+Audio Input
+    ↓
+[Demucs Stem Separation]
+    ↓
+├─ Bass  → [YourMT3] → bass.mid    (GM Programs 32-39)
+├─ Drums → [YourMT3] → drums.mid   (Percussion track)
+├─ Other → [YourMT3] → other.mid   (Melodic instruments)
+└─ Vocals → [VAD]    → vocals.mid   (Voice activity only)
+    ↓
+MIDI Files Output
+```
+
+### Tech Stack
+
+**Backend**:
+- FastAPI (async Python web framework)
+- PyTorch 2.1+ (deep learning)
+- Uvicorn (ASGI server)
+
+**AI Models**:
+- YourMT3 (YPTF.MoE+Multi, 536M parameters)
+- Demucs htdemucs (4-stem separator)
+
+**Audio Processing**:
+- librosa (audio analysis)
+- torchaudio (PyTorch audio)
+- soundfile (audio I/O)
+
+---
+
+## API Reference
+
+### Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/` | Root endpoint, service info |
+| GET | `/health` | Health check, model status |
+| GET | `/model/info` | Model information |
+| POST | `/api/v1/upload` | Upload audio file |
+| POST | `/api/v1/predict/{job_id}` | Start transcription |
+| GET | `/api/v1/status/{job_id}` | Check processing status |
+| GET | `/api/v1/results/{job_id}` | Get transcription results |
+| GET | `/api/v1/files/{filename}` | Download MIDI file |
+
+### Interactive Documentation
+
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+
+---
+
+## Configuration
+
+### Environment Variables
+
+Create `.env` file:
+
+```bash
+# Server
+PORT=8000
+HOST=0.0.0.0
+
+# Model
+SKIP_MODEL_LOADING=0  # Set to 1 to skip model loading (testing mode)
+
+# Security
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8000
+
+# Performance
+MAX_UPLOAD_SIZE=100  # MB
+REQUEST_TIMEOUT=600  # seconds
+```
+
+### GPU Support
+
+Automatically detected. Verify with:
+
+```python
+import torch
+print(torch.cuda.is_available())  # Should print True if GPU available
+```
+
+---
+
+## Performance
+
+### Processing Times (CPU)
+
+| Duration | Stem Separation | MIDI Transcription | Total |
+|----------|----------------|-------------------|-------|
+| 1 minute | ~30-60s | ~2-3 minutes | ~3-5 min |
+| 3 minutes | ~90-180s | ~6-9 minutes | ~10-15 min |
+
+### GPU Acceleration
+
+**5-10x faster** with NVIDIA GPU (CUDA):
+
+| Duration | Total Time (GPU) |
+|----------|-----------------|
+| 1 minute | ~30-60s |
+| 3 minutes | ~2-3 minutes |
+
+### Resource Requirements
+
+| Component | Minimum | Recommended |
+|-----------|---------|-------------|
+| RAM | 8GB | 16GB |
+| CPU | 4 cores | 8 cores |
+| GPU | - | NVIDIA with 4GB+ VRAM |
+| Disk | 10GB | 20GB+ |
+
+---
+
+## Development
 
 ### Project Structure
 
 ```
 music-to-midi-api/
 ├── app/
-│   ├── main.py                     # FastAPI application
-│   ├── api/                        # API endpoints
-│   ├── services/                   # Business logic
-│   ├── models/                     # ML models
-│   │   ├── stem_specific_classifier.py
-│   │   ├── stem_integrated_classifier.py
-│   │   └── 3_stems_models/         # Pre-trained models
-│   ├── core/                       # Configuration
-│   └── utils/                      # Utilities
-├── tests/                          # Test suite
-├── deploy/                         # Deployment scripts
-├── scripts/                        # Utility scripts
-├── requirements.txt                # Python dependencies
-└── README.md                       # This file
+│   ├── api/
+│   │   ├── routes.py          # API endpoints
+│   │   └── models.py          # Pydantic models
+│   ├── services/
+│   │   ├── yourmt3_service.py # YourMT3 integration
+│   │   ├── demucs_separator.py # Stem separation
+│   │   ├── stem_processors.py # Per-stem processing
+│   │   └── transcription.py   # Pipeline orchestration
+│   └── main.py                # FastAPI app
+├── amt/                       # YourMT3 checkpoint (not in git)
+├── uploads/                   # User uploads (not in git)
+├── logs/                      # Application logs
+├── tests/                     # Test suite
+├── Dockerfile                 # Docker image
+├── docker-compose.yml         # Docker Compose config
+├── requirements.txt           # Python dependencies
+└── setup_checkpoint.sh        # Checkpoint download script
 ```
 
-## Installation
-
-### Prerequisites
-
-- Python 3.10+
-- ffmpeg (for audio processing)
-- CUDA (optional, for GPU acceleration)
-
-### Setup
+### Running Tests
 
 ```bash
-# Clone repository
-git clone https://github.com/Pyzeur-ColonyLab/music-to-midi-api.git
-cd music-to-midi-api
+# Verification test
+python test_local_amt.py
 
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Sanity test
+python sanity_test.py
 
-# Install dependencies
-pip install -r requirements.txt
-
-# Download pre-trained models (if not included)
-python scripts/download_models.py
+# Full test suite
+pytest tests/ -v
 ```
 
-## Usage
-
-### Start API Server
+### Development Mode
 
 ```bash
-# Development mode
+# Auto-reload on file changes
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
-# Production mode
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+# Test without model loading
+SKIP_MODEL_LOADING=1 python -m app.main
 ```
 
-### API Endpoints
-
-#### Health Check
-```bash
-GET /
-```
-
-#### Model Information
-```bash
-GET /model/info
-```
-
-#### Upload Audio File
-```bash
-POST /upload
-Content-Type: multipart/form-data
-
-{
-  "file": <audio_file>
-}
-
-Response:
-{
-  "job_id": "abc123",
-  "message": "File uploaded successfully"
-}
-```
-
-#### Start Transcription
-```bash
-POST /predict/{job_id}
-Content-Type: application/json
-
-{
-  "confidence_threshold": 0.1
-}
-
-Response:
-{
-  "job_id": "abc123",
-  "message": "Analysis completed successfully",
-  "duration": 180.5,
-  "tempo": 120,
-  "total_beats": 450,
-  "stems_processed": 3,
-  "total_segments": 45
-}
-```
-
-#### Get Job Status
-```bash
-GET /status/{job_id}
-
-Response:
-{
-  "job_id": "abc123",
-  "status": "completed",
-  "progress": 100,
-  "message": "Analysis completed"
-}
-```
-
-#### Get Results
-```bash
-GET /results/{job_id}
-
-Response:
-{
-  "job_id": "abc123",
-  "filename": "song.mp3",
-  "analysis_result": {
-    "song_info": {...},
-    "timeline": {...},
-    "processing_summary": {...}
-  }
-}
-```
-
-## GM MIDI Classification
-
-Instrument classification follows General MIDI specification with stem-based constraints:
-
-### Stem Mapping
-
-- **Bass Stem**: Programs 33-40 (GM Bass family only)
-- **Others Stem**: Programs 1-32, 41-112, 121-128 (melodic/harmonic instruments)
-- **Drums Stem**: Programs 113-120 + Channel 10 GM percussion
-- **Vocals Stem**: VAD only (v1.0), future speech-to-text
-
-### Constraint Logic
-
-```python
-# If MT3 predicts non-bass program on bass stem, correct to program 33
-if stem_type == 'bass':
-    if midi_track.program not in range(32, 40):
-        midi_track.program = 33  # Electric Bass (finger)
-```
-
-See [MT3/SESSION_2025-10-07_GM_Classification.md](../MT3/SESSION_2025-10-07_GM_Classification.md) for details.
+---
 
 ## Deployment
 
-### Automated Setup (Recommended)
+See [DEPLOYMENT.md](DEPLOYMENT.md) for complete deployment guide including:
 
-**Initial Deployment**:
+- Production server setup (Gunicorn)
+- Nginx reverse proxy
+- SSL/TLS configuration
+- Cloud deployment (AWS, GCP, Azure, DigitalOcean)
+- Docker/Kubernetes
+- Monitoring and scaling
+
+Quick Docker deployment:
+
 ```bash
-# On your server (Ubuntu/Debian)
-curl -fsSL https://raw.githubusercontent.com/Pyzeur-ColonyLab/music-to-midi-api/main/deploy/setup.sh | bash
+# Build
+docker build -t music-to-midi-api .
 
-# Or clone first, then run
-git clone https://github.com/Pyzeur-ColonyLab/music-to-midi-api.git
-cd music-to-midi-api
-./deploy/setup.sh
+# Run
+docker run -d \
+  -p 8000:8000 \
+  -v $(pwd)/uploads:/app/uploads \
+  -v $(pwd)/amt:/app/amt \
+  --name music-to-midi-api \
+  music-to-midi-api
 ```
 
-**What setup.sh does**:
-- ✅ Installs system dependencies (Python 3.10, ffmpeg, git)
-- ✅ Creates virtual environment and installs Python packages
-- ✅ Downloads Demucs models automatically
-- ✅ Creates systemd service for auto-start
-- ✅ Configures logging to `logs/` directory
-- ✅ Starts the API service
+---
 
-**Quick Updates**:
+## Troubleshooting
+
+### Model Won't Load
+
 ```bash
-# From your Mac or server
-./deploy/update.sh
+# Verify checkpoint exists
+ls -lh amt/logs/2024/.../checkpoints/last.ckpt
 
-# Or manually
-cd ~/music-to-midi-api
-git pull
-source venv/bin/activate
+# Run verification
+python test_local_amt.py
+
+# Check dependencies
 pip install -r requirements.txt
-sudo systemctl restart music-to-midi-api
 ```
 
-### Service Management
+### Out of Memory
 
 ```bash
-# Check status
-sudo systemctl status music-to-midi-api
+# Reduce concurrent processing
+# Single worker mode (default)
 
-# View logs (live)
-sudo journalctl -u music-to-midi-api -f
-
-# View service logs (file)
-tail -f ~/music-to-midi-api/logs/service.log
-tail -f ~/music-to-midi-api/logs/error.log
-
-# Restart service
-sudo systemctl restart music-to-midi-api
-
-# Stop service
-sudo systemctl stop music-to-midi-api
-
-# Disable auto-start
-sudo systemctl disable music-to-midi-api
+# Monitor memory
+watch -n 1 free -h
 ```
 
-### Manual Deployment
-
-If you prefer manual setup:
+### Slow Processing
 
 ```bash
-# Install dependencies
-sudo apt-get update
-sudo apt-get install -y python3.10 python3-pip python3-venv ffmpeg git
+# Check GPU availability
+python -c "import torch; print(torch.cuda.is_available())"
 
-# Clone repository
-git clone https://github.com/Pyzeur-ColonyLab/music-to-midi-api.git
-cd music-to-midi-api
-
-# Setup Python environment
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-# Download models
-python scripts/download_models.py
-
-# Run development server
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+# Use GPU if available (automatic)
+# Or reduce audio file length
 ```
 
-### GPU Support
-
-The service auto-detects CUDA and uses GPU if available. No configuration needed!
-
-```python
-# In app/services/model_loader.py
-device = "cuda" if torch.cuda.is_available() else "cpu"
-```
-
-Both CPU and GPU instances work with the same setup script.
-
-## Performance
-
-### Processing Time (3-minute audio)
-
-| Mode   | Hardware      | Target Time | Max Acceptable |
-|--------|---------------|-------------|----------------|
-| Direct | GPU (A10G)    | 30s         | 60s            |
-| Direct | CPU (8 cores) | 5min        | 8min           |
-| Stems  | GPU (A10G)    | 90s         | 120s           |
-| Stems  | CPU (8 cores) | 12min       | 15min          |
-
-### Resource Usage
-
-| Component          | GPU Memory | CPU Memory | Disk Space |
-|--------------------|------------|------------|------------|
-| YourMT3 Model      | 8GB        | -          | 600MB      |
-| Demucs Model       | 2GB        | -          | 80MB       |
-| Audio Processing   | 1GB        | 2GB        | 100MB/file |
-| **Total**          | ~11GB      | ~4GB       | ~1GB       |
-
-## Development
-
-### Run Tests
-
-```bash
-# Quick test run
-./scripts/run_tests.sh
-
-# Or manually with pytest
-pytest tests/ -v
-
-# Specific test file
-pytest tests/test_api.py -v
-
-# Specific test class
-pytest tests/test_midi_processor.py::TestStemConstraints -v
-
-# With coverage
-pytest --cov=app tests/
-```
-
-**Available Tests**:
-- `tests/test_api.py` - API endpoint integration tests
-- `tests/test_midi_processor.py` - MIDI constraint logic tests
-- `tests/conftest.py` - Test fixtures and configuration
-
-### API Usage Examples
-
-See [docs/API_USAGE.md](docs/API_USAGE.md) for complete examples:
-- cURL commands
-- Python client
-- JavaScript/TypeScript
-- Batch processing
-- Error handling
-
-### Code Quality
-
-```bash
-# Format code
-black app/ tests/
-
-# Lint
-flake8 app/ tests/
-
-# Type checking (if using mypy)
-mypy app/
-```
-
-## Documentation
-
-- [API Specification](../MT3/API_SPECIFICATION.md) - Complete technical specification
-- [GM Classification Session](../MT3/SESSION_2025-10-07_GM_Classification.md) - MIDI classification decisions
-- [MIDI Reference](../MT3/MIDI%20Ref%20-%20Feuille%201.csv) - GM program mappings
+---
 
 ## License
 
-[Your License]
+This project is licensed under the MIT License - see [LICENSE](LICENSE) file for details.
 
-## Contributing
+### Model Licenses
 
-[Your Contributing Guidelines]
+- **YourMT3**: Apache 2.0 License
+- **Demucs**: MIT License
+
+---
+
+## Acknowledgments
+
+- [YourMT3](https://github.com/mimbres/YourMT3) - Advanced audio-to-MIDI transcription
+- [Demucs](https://github.com/facebookresearch/demucs) - Music source separation
+- [FastAPI](https://fastapi.tiangolo.com/) - Modern Python web framework
+
+---
 
 ## Support
 
-[Your Support Information]
+- **Documentation**: http://localhost:8000/docs
+- **Issues**: GitHub Issues
+
+---
+
+## Changelog
+
+### v1.0.0 (2025-10-09)
+
+- ✨ Initial release
+- 🎵 YourMT3 integration for MIDI transcription
+- 🎚️ Demucs 4-stem separation
+- 📡 RESTful API with comprehensive endpoints
+- 🐳 Docker support
+- 📖 Complete documentation
+
+---
+
+**Assisted by Claude Code**

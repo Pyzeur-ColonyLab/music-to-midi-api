@@ -6,6 +6,10 @@ Modular processor architecture for future model swapping
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
 import logging
+import os
+from pathlib import Path
+
+from app.services.yourmt3_service import transcribe_audio_to_midi, get_yourmt3_model
 
 logger = logging.getLogger(__name__)
 
@@ -69,39 +73,59 @@ class BassStemProcessor(StemProcessor):
 
         Args:
             audio_path: Path to bass stem audio
-            **kwargs: Additional parameters (confidence_threshold, etc.)
+            **kwargs: Additional parameters (output_dir, job_id, etc.)
 
         Returns:
             {
                 'type': 'midi',
                 'stem': 'bass',
-                'predictions': [...],
-                'midi_path': '...',  # if MIDI file generated
-                'notes_count': int
+                'midi_path': '...',
+                'notes_count': int,
+                'program_range': [33, 40],  # GM bass family
+                ...
             }
         """
         logger.info(f"Processing bass stem: {audio_path}")
 
-        # v1.0: Use existing 3-stem model for bass
-        # The model is already specialized for bass
-        confidence_threshold = kwargs.get('confidence_threshold', 0.1)
-
         try:
-            # Process with model (placeholder - actual implementation uses real model)
+            # Get output directory and job_id from kwargs
+            job_id = kwargs.get('job_id', 'default')
+            output_dir = kwargs.get('output_dir', f'uploads/{job_id}/midi')
+
+            # Ensure output directory exists
+            os.makedirs(output_dir, exist_ok=True)
+
+            # Generate track name for this stem
+            track_name = f"{job_id}_bass"
+
+            # Transcribe audio to MIDI using YourMT3
+            midi_path, stats = transcribe_audio_to_midi(
+                audio_path=audio_path,
+                output_dir=output_dir,
+                track_name=track_name,
+                model=self.model  # Use model passed during initialization
+            )
+
+            # Build result with MIDI path and metadata
             result = {
                 'type': 'midi',
                 'stem': 'bass',
                 'processor': 'BassStemProcessor',
                 'model': 'YourMT3',
                 'audio_path': audio_path,
+                'midi_path': midi_path,
+                'midi_url': f'/api/v1/files/{os.path.basename(midi_path)}',
+                'program_range': [33, 40],  # GM bass programs
+                'default_program': 33,  # Electric Bass (finger)
+                'transcription_stats': stats,
                 'status': 'processed'
             }
 
-            logger.info(f"Bass stem processed successfully")
+            logger.info(f"✅ Bass stem processed successfully: {midi_path}")
             return result
 
         except Exception as e:
-            logger.error(f"Bass stem processing failed: {e}")
+            logger.error(f"❌ Bass stem processing failed: {e}")
             raise RuntimeError(f"Bass stem processing failed: {e}")
 
     def get_info(self) -> Dict[str, Any]:
@@ -131,28 +155,63 @@ class DrumsStemProcessor(StemProcessor):
 
     def process(self, audio_path: str, **kwargs) -> Dict[str, Any]:
         """
-        Process drums stem
+        Process drums stem with YourMT3
 
-        Future versions can swap to specialized drum transcription models
+        Args:
+            audio_path: Path to drums stem audio
+            **kwargs: Additional parameters (output_dir, job_id, etc.)
+
+        Returns:
+            {
+                'type': 'midi',
+                'stem': 'drums',
+                'midi_path': '...',
+                'channel_10': True,  # Standard GM percussion
+                ...
+            }
         """
         logger.info(f"Processing drums stem: {audio_path}")
 
         try:
+            # Get output directory and job_id from kwargs
+            job_id = kwargs.get('job_id', 'default')
+            output_dir = kwargs.get('output_dir', f'uploads/{job_id}/midi')
+
+            # Ensure output directory exists
+            os.makedirs(output_dir, exist_ok=True)
+
+            # Generate track name for this stem
+            track_name = f"{job_id}_drums"
+
+            # Transcribe audio to MIDI using YourMT3
+            midi_path, stats = transcribe_audio_to_midi(
+                audio_path=audio_path,
+                output_dir=output_dir,
+                track_name=track_name,
+                model=self.model
+            )
+
+            # Build result with MIDI path and metadata
             result = {
                 'type': 'midi',
                 'stem': 'drums',
                 'processor': 'DrumsStemProcessor',
                 'model': 'YourMT3',
                 'audio_path': audio_path,
+                'midi_path': midi_path,
+                'midi_url': f'/api/v1/files/{os.path.basename(midi_path)}',
+                'channel_10': True,  # Standard GM percussion channel
+                'program_range': [113, 120],  # Melodic drums (if not channel 10)
+                'transcription_stats': stats,
                 'status': 'processed',
-                'note': 'v1.0 uses YourMT3, future: specialized drum model'
+                'note': 'v1.0 uses YourMT3, future: specialized drum model (ADTof, DrumGAN)'
             }
 
-            logger.info(f"Drums stem processed successfully")
+            logger.info(f"✅ Drums stem processed successfully: {midi_path}")
             return result
 
         except Exception as e:
-            logger.error(f"Drums stem processing failed: {e}")
+            logger.error(f"❌ Drums stem processing failed: {e}")
             raise RuntimeError(f"Drums stem processing failed: {e}")
 
     def get_info(self) -> Dict[str, Any]:
@@ -182,24 +241,67 @@ class OtherStemProcessor(StemProcessor):
         self.stem_type = 'other'
 
     def process(self, audio_path: str, **kwargs) -> Dict[str, Any]:
-        """Process other stem with YourMT3"""
+        """
+        Process other stem with YourMT3
+
+        Args:
+            audio_path: Path to other stem audio
+            **kwargs: Additional parameters (output_dir, job_id, etc.)
+
+        Returns:
+            {
+                'type': 'midi',
+                'stem': 'other',
+                'midi_path': '...',
+                'program_range': [...],  # Wide GM program range
+                ...
+            }
+        """
         logger.info(f"Processing other stem: {audio_path}")
 
         try:
+            # Get output directory and job_id from kwargs
+            job_id = kwargs.get('job_id', 'default')
+            output_dir = kwargs.get('output_dir', f'uploads/{job_id}/midi')
+
+            # Ensure output directory exists
+            os.makedirs(output_dir, exist_ok=True)
+
+            # Generate track name for this stem
+            track_name = f"{job_id}_other"
+
+            # Transcribe audio to MIDI using YourMT3
+            midi_path, stats = transcribe_audio_to_midi(
+                audio_path=audio_path,
+                output_dir=output_dir,
+                track_name=track_name,
+                model=self.model
+            )
+
+            # Build result with MIDI path and metadata
             result = {
                 'type': 'midi',
                 'stem': 'other',
                 'processor': 'OtherStemProcessor',
                 'model': 'YourMT3',
                 'audio_path': audio_path,
-                'status': 'processed'
+                'midi_path': midi_path,
+                'midi_url': f'/api/v1/files/{os.path.basename(midi_path)}',
+                'program_range': (
+                    list(range(1, 33)) +    # Piano, chromatic, organ, guitar
+                    list(range(41, 113)) +  # Strings, brass, reed, synth
+                    list(range(121, 129))   # Sound effects (rarely transcribed)
+                ),
+                'transcription_stats': stats,
+                'status': 'processed',
+                'note': 'Handles piano, guitar, strings, brass, synths, etc.'
             }
 
-            logger.info(f"Other stem processed successfully")
+            logger.info(f"✅ Other stem processed successfully: {midi_path}")
             return result
 
         except Exception as e:
-            logger.error(f"Other stem processing failed: {e}")
+            logger.error(f"❌ Other stem processing failed: {e}")
             raise RuntimeError(f"Other stem processing failed: {e}")
 
     def get_info(self) -> Dict[str, Any]:

@@ -4,6 +4,7 @@ FastAPI endpoint definitions
 """
 
 from fastapi import APIRouter, UploadFile, File, HTTPException, status
+from fastapi.responses import FileResponse
 from typing import Dict, Any
 import os
 import uuid
@@ -143,6 +144,7 @@ async def predict_instruments(job_id: str, request: PredictionRequest = Predicti
         logger.info(f"Starting transcription for job {job_id}")
         analysis_result = transcribe_audio(
             audio_path=job["file_path"],
+            job_id=job_id,
             confidence_threshold=request.confidence_threshold,
             progress_callback=update_progress
         )
@@ -236,6 +238,59 @@ async def get_results(job_id: str):
     )
 
 
+@router.get("/files/{filename}")
+async def download_file(filename: str):
+    """
+    Download generated MIDI file
+
+    Args:
+        filename: Name of the MIDI file to download (e.g., {job_id}_bass.mid)
+
+    Returns:
+        MIDI file for download
+
+    Raises:
+        404: If file not found
+    """
+    # Security: Only allow downloading from uploads directory
+    # Prevent path traversal attacks
+    safe_filename = os.path.basename(filename)
+
+    # Search in uploads directory for MIDI files
+    uploads_dir = "uploads"
+
+    # Check all subdirectories for the file
+    file_path = None
+    for root, dirs, files in os.walk(uploads_dir):
+        if safe_filename in files:
+            file_path = os.path.join(root, safe_filename)
+            break
+
+    if not file_path or not os.path.exists(file_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"File not found: {filename}"
+        )
+
+    # Verify it's a MIDI file
+    if not file_path.endswith('.mid'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only MIDI files (.mid) can be downloaded"
+        )
+
+    logger.info(f"Serving MIDI file: {file_path}")
+
+    return FileResponse(
+        path=file_path,
+        media_type="audio/midi",
+        filename=safe_filename,
+        headers={
+            "Content-Disposition": f"attachment; filename={safe_filename}"
+        }
+    )
+
+
 @router.delete("/jobs/{job_id}")
 async def cleanup_job(job_id: str):
     """Clean up job files and data"""
@@ -251,6 +306,14 @@ async def cleanup_job(job_id: str):
     if os.path.exists(job["file_path"]):
         os.remove(job["file_path"])
         logger.info(f"Deleted file: {job['file_path']}")
+
+    # Remove MIDI directory if it exists
+    job_id_clean = job_id.split('_')[0] if '_' in job_id else job_id
+    midi_dir = f"uploads/{job_id_clean}/midi"
+    if os.path.exists(midi_dir):
+        import shutil
+        shutil.rmtree(midi_dir)
+        logger.info(f"Deleted MIDI directory: {midi_dir}")
 
     # Remove job from storage
     del job_storage[job_id]

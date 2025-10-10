@@ -10,6 +10,11 @@ pip-log.txt
 .pytest_cache/
 *.egg-info/
 
+# Virtual Environment
+venv/
+env/
+ENV/
+
 # Environment files
 .env
 .env.local
@@ -28,6 +33,10 @@ checkpoints/
 *.h5
 *.pkl
 *.joblib
+
+# YourMT3 model files (download separately - see setup instructions)
+amt/
+!amt/.gitkeep
 
 # Audio files (except test samples)
 uploads/

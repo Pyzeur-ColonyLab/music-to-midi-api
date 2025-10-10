@@ -11,7 +11,7 @@ import logging
 
 from app.api.routes import router
 from app.api.models import ModelInfo, HealthResponse
-from app.services.model_loader import load_yourmt3_model, get_model_info, get_model_instance
+from app.services.yourmt3_service import load_yourmt3, get_yourmt3_model, get_model_info
 
 # Configure logging
 logging.basicConfig(
@@ -61,12 +61,12 @@ async def health_check():
 
     Returns system status, model state, and GPU availability
     """
-    model_instance = get_model_instance()
+    model_instance = get_yourmt3_model()
 
     return HealthResponse(
         status="healthy" if model_instance is not None else "initializing",
         model_loaded=model_instance is not None,
-        device=str(model_instance.device) if model_instance else "unknown",
+        device=str(model_instance.device) if model_instance and hasattr(model_instance, 'device') else "unknown",
         gpu_available=torch.cuda.is_available(),
         timestamp=datetime.now()
     )
@@ -90,35 +90,43 @@ async def get_model_information():
 @app.on_event("startup")
 async def startup_event():
     """
-    Initialize the 3-stem models on startup
+    Initialize YourMT3 model on startup
 
-    Loads YourMT3 with specialized bass, drums, and other stem classifiers
+    Loads YourMT3 for audio-to-MIDI transcription
+
+    Set SKIP_MODEL_LOADING=1 to start API without loading models (for testing)
     """
+    import os
+
+    # Check if model loading should be skipped
+    if os.getenv('SKIP_MODEL_LOADING') == '1':
+        logger.info("=" * 60)
+        logger.info("🚀 Starting Music-to-MIDI API Service (TESTING MODE)")
+        logger.info("=" * 60)
+        logger.warning("⚠️  Model loading SKIPPED (SKIP_MODEL_LOADING=1)")
+        logger.warning("⚠️  API endpoints will return 503 errors")
+        logger.info("=" * 60)
+        logger.info("📖 API Documentation: http://localhost:8000/docs")
+        logger.info("=" * 60)
+        return
+
     try:
         logger.info("=" * 60)
         logger.info("🚀 Starting Music-to-MIDI API Service")
         logger.info("=" * 60)
 
-        # Path to the 3-stem models (relative to project root)
-        models_dir = "app/models/3_stems_models"
+        logger.info("📦 Initializing YourMT3 model...")
 
-        logger.info("📦 Initializing 3-stem specialized models...")
-
-        # Initialize the model (auto-detects CPU/GPU)
-        model = load_yourmt3_model(
-            models_dir=models_dir,
-            device=None,  # Auto-detect
-            sample_rate=22050,
-            segment_duration=4.0
-        )
+        # Load YourMT3 model (auto-detects CPU/GPU)
+        model = load_yourmt3(device=None)
 
         logger.info("=" * 60)
         logger.info("✅ Music-to-MIDI API Ready!")
         logger.info("=" * 60)
-        logger.info(f"   Device: {model.device}")
-        logger.info(f"   Models loaded: bass (99%), drums (98%), other (84%)")
-        logger.info(f"   Total classes: 24 instrument classes")
-        logger.info(f"   Sample rate: {model.sample_rate}Hz")
+        logger.info(f"   Model: YourMT3 (YPTF.MoE+Multi, 536M params)")
+        logger.info(f"   Device: {model.device if hasattr(model, 'device') else 'unknown'}")
+        logger.info(f"   Capabilities: Audio-to-MIDI transcription")
+        logger.info(f"   Supported: Multi-instrument, polyphonic, percussion")
         logger.info("=" * 60)
         logger.info("📖 API Documentation: http://localhost:8000/docs")
         logger.info("🏥 Health Check: http://localhost:8000/health")
@@ -126,10 +134,10 @@ async def startup_event():
 
     except Exception as e:
         logger.error("=" * 60)
-        logger.error(f"❌ Failed to initialize models: {e}")
+        logger.error(f"❌ Failed to initialize YourMT3 model: {e}")
         logger.error("=" * 60)
         logger.error("Service will start but model endpoints will return 503 errors")
-        logger.error("Check that model files exist in app/models/3_stems_models/")
+        logger.error("Check that YourMT3 checkpoint exists in MT3/yourmt3_space/")
         logger.error("=" * 60)
 
 

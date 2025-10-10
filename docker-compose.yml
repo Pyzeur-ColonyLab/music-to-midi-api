@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: music-to-midi-api
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount uploads directory for persistence
+      - ./uploads:/app/uploads
+      # Mount amt directory (download checkpoint first!)
+      - ./amt:/app/amt
+      # Mount logs directory
+      - ./logs:/app/logs
+    environment:
+      # Set to "1" to skip model loading for testing
+      - SKIP_MODEL_LOADING=${SKIP_MODEL_LOADING:-0}
+      # GPU support (if available)
+      - NVIDIA_VISIBLE_DEVICES=all
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # Uncomment for GPU support
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+networks:
+  default:
+    name: music-to-midi-network
