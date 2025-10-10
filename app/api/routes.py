@@ -49,15 +49,16 @@ async def upload_file(file: UploadFile = File(...)):
             detail=f"Unsupported file format '{file_ext}'. Allowed: {', '.join(allowed_extensions)}"
         )
 
-    # Validate file size (100MB limit per spec)
-    max_size = 100 * 1024 * 1024  # 100MB
+    # Validate file size (configurable via env, default 500MB for music production)
+    max_size = int(os.getenv("MAX_UPLOAD_SIZE_MB", "500")) * 1024 * 1024
     file_content = await file.read()
     file_size = len(file_content)
 
     if file_size > max_size:
+        max_size_mb = max_size / 1024 / 1024
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File size ({file_size / 1024 / 1024:.1f}MB) exceeds 100MB limit"
+            detail=f"File size ({file_size / 1024 / 1024:.1f}MB) exceeds {max_size_mb:.0f}MB limit"
         )
 
     # Generate job ID and save file
