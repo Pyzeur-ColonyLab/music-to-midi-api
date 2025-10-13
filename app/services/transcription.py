@@ -301,7 +301,7 @@ def get_transcription_stats(result: Dict[str, Any]) -> Dict[str, Any]:
 
     stats = {
         'total_duration': song_info.get('duration', 0),
-        'total_beats': song_info.get('beats', 0),
+        'total_beats': song_info.get('total_beats', 0),
         'tempo': song_info.get('tempo', 0),
         'stems_processed': processing_summary.get('stems_processed', 0),
         'total_segments': processing_summary.get('total_segments', 0),
