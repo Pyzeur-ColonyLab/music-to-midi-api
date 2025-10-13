@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 
 from app.services.yourmt3_service import transcribe_audio_to_midi, get_yourmt3_model
+from app.services.midi_processor import process_midi_for_stem_compliance
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +107,14 @@ class BassStemProcessor(StemProcessor):
                 model=self.model  # Use model passed during initialization
             )
 
+            # Apply GM Level 1 compliance constraints for bass stem
+            try:
+                midi_path = process_midi_for_stem_compliance(midi_path, 'bass')
+                logger.info(f"✅ GM compliance applied to bass MIDI")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to apply GM compliance to bass: {e}")
+                # Continue with original MIDI if post-processing fails
+
             # Build result with MIDI path and metadata
             result = {
                 'type': 'midi',
@@ -190,6 +199,14 @@ class DrumsStemProcessor(StemProcessor):
                 track_name=track_name,
                 model=self.model
             )
+
+            # Apply GM Level 1 compliance constraints for drums stem
+            try:
+                midi_path = process_midi_for_stem_compliance(midi_path, 'drums')
+                logger.info(f"✅ GM compliance applied to drums MIDI (Channel 10)")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to apply GM compliance to drums: {e}")
+                # Continue with original MIDI if post-processing fails
 
             # Build result with MIDI path and metadata
             result = {
@@ -278,6 +295,14 @@ class OtherStemProcessor(StemProcessor):
                 model=self.model
             )
 
+            # Apply GM Level 1 compliance constraints for other stem
+            try:
+                midi_path = process_midi_for_stem_compliance(midi_path, 'other')
+                logger.info(f"✅ GM compliance applied to other MIDI")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to apply GM compliance to other: {e}")
+                # Continue with original MIDI if post-processing fails
+
             # Build result with MIDI path and metadata
             result = {
                 'type': 'midi',
@@ -356,6 +381,14 @@ class VocalsStemProcessor(StemProcessor):
                 track_name=track_name,
                 model=model
             )
+
+            # Apply GM Level 1 compliance constraints for vocals stem
+            try:
+                midi_path = process_midi_for_stem_compliance(midi_path, 'vocals')
+                logger.info(f"✅ GM compliance applied to vocals MIDI")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to apply GM compliance to vocals: {e}")
+                # Continue with original MIDI if post-processing fails
 
             result = {
                 'type': 'midi',
