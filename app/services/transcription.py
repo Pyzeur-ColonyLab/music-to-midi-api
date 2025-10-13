@@ -81,6 +81,26 @@ def transcribe_audio(
             model_name="htdemucs"  # 4-stem Demucs
         )
 
+        # Create symlinks/copies with job_id prefix for frontend compatibility
+        # Frontend expects: {job_id}_bass.wav, {job_id}_drums.wav, etc.
+        import shutil
+        for stem_name, stem_path in list(stem_paths.items()):
+            prefixed_filename = f"{job_id}_{stem_name}.wav"
+            prefixed_path = os.path.join(stems_dir, prefixed_filename)
+
+            try:
+                # Create symlink (preferred on Unix systems)
+                if os.name != 'nt':  # Unix/Linux/Mac
+                    if not os.path.exists(prefixed_path):
+                        os.symlink(os.path.basename(stem_path), prefixed_path)
+                else:  # Windows - use copy
+                    if not os.path.exists(prefixed_path):
+                        shutil.copy2(stem_path, prefixed_path)
+
+                logger.info(f"   Created frontend-compatible path: {prefixed_filename}")
+            except Exception as e:
+                logger.warning(f"Could not create prefixed stem file: {e}")
+
         if progress_callback:
             progress_callback(20, "Stems separated successfully")
 
@@ -88,6 +108,7 @@ def transcribe_audio(
         stems_result = {}
         progress_per_stem = 70 / len(stem_paths)  # 70% total for stem processing
         current_progress = 20
+        failed_stems = []
 
         for stem_name, stem_path in stem_paths.items():
             if progress_callback:
@@ -96,33 +117,91 @@ def transcribe_audio(
                     f"Transcribing {stem_name} stem to MIDI..."
                 )
 
-            # Create appropriate processor for this stem
-            processor = create_stem_processor(stem_name, model=model)
+            try:
+                # Create appropriate processor for this stem
+                processor = create_stem_processor(stem_name, model=model)
 
-            # Process stem to generate MIDI
-            stem_result = processor.process(
-                audio_path=stem_path,
-                job_id=job_id,
-                output_dir=f"uploads/{job_id}/midi"
+                # Process stem to generate MIDI
+                stem_result = processor.process(
+                    audio_path=stem_path,
+                    job_id=job_id,
+                    output_dir=f"uploads/{job_id}/midi"
+                )
+
+                stems_result[stem_name] = stem_result
+                current_progress += progress_per_stem
+
+                logger.info(
+                    f"✅ Processed {stem_name} stem successfully: {stem_result.get('midi_path', 'N/A')}"
+                )
+
+            except Exception as e:
+                logger.error(f"❌ Failed to process {stem_name} stem: {e}")
+                logger.exception(f"Full error for {stem_name} stem:")
+
+                # Store error info but continue processing other stems
+                stems_result[stem_name] = {
+                    'status': 'failed',
+                    'stem': stem_name,
+                    'error': str(e),
+                    'midi_path': None
+                }
+                failed_stems.append(stem_name)
+                current_progress += progress_per_stem
+
+        # Log summary of failures
+        if failed_stems:
+            logger.warning(
+                f"⚠️ Failed to process {len(failed_stems)} stem(s): {', '.join(failed_stems)}"
             )
-
-            stems_result[stem_name] = stem_result
-            current_progress += progress_per_stem
-
-            logger.info(
-                f"Processed {stem_name} stem: {stem_result.get('midi_path', 'N/A')}"
-            )
+        else:
+            logger.info(f"✅ All {len(stems_result)} stems processed successfully")
 
         if progress_callback:
             progress_callback(90, "All stems transcribed")
 
-        # Step 3: Compile final result
+        # Step 3: Calculate audio metadata (duration, tempo, beats)
+        if progress_callback:
+            progress_callback(92, "Calculating audio metadata...")
+
+        try:
+            import librosa
+            import numpy as np
+
+            # Load audio for analysis (use mono for faster processing)
+            y, sr = librosa.load(audio_path, sr=22050, mono=True)
+
+            # Calculate duration
+            audio_duration = librosa.get_duration(y=y, sr=sr)
+
+            # Detect tempo and beats
+            tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
+            beat_times = librosa.frames_to_time(beat_frames, sr=sr)
+
+            logger.info(
+                f"Audio metadata: duration={audio_duration:.2f}s, tempo={tempo:.1f} BPM, beats={len(beat_times)}"
+            )
+
+        except Exception as e:
+            logger.warning(f"Could not calculate metadata: {e}. Using defaults.")
+            audio_duration = 0.0
+            tempo = 0.0
+            beat_times = []
+
+        if progress_callback:
+            progress_callback(95, "Compiling results...")
+
+        # Step 4: Compile final result
         result = {
             "job_id": job_id,
             "song_info": {
                 "filename": audio_file.name,
                 "file_path": str(audio_file),
                 "stems_separated": len(stem_paths),
+                "duration": float(audio_duration),
+                "tempo": float(tempo),
+                "total_beats": int(len(beat_times)),
+                "beats": beat_times.tolist() if len(beat_times) > 0 else []
             },
             "stems": stems_result,
             "processing_summary": {

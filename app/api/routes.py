@@ -242,22 +242,23 @@ async def get_results(job_id: str):
 @router.get("/files/{filename}")
 async def download_file(filename: str):
     """
-    Download generated MIDI file
+    Download generated MIDI or audio stem file
 
     Args:
-        filename: Name of the MIDI file to download (e.g., {job_id}_bass.mid)
+        filename: Name of the file to download (e.g., {job_id}_bass.mid or {job_id}_bass.wav)
 
     Returns:
-        MIDI file for download
+        MIDI or WAV file for download
 
     Raises:
         404: If file not found
+        400: If file type not allowed
     """
     # Security: Only allow downloading from uploads directory
     # Prevent path traversal attacks
     safe_filename = os.path.basename(filename)
 
-    # Search in uploads directory for MIDI files
+    # Search in uploads directory for files
     uploads_dir = "uploads"
 
     # Check all subdirectories for the file
@@ -273,18 +274,29 @@ async def download_file(filename: str):
             detail=f"File not found: {filename}"
         )
 
-    # Verify it's a MIDI file
-    if not file_path.endswith('.mid'):
+    # Verify it's an allowed file type (MIDI or WAV)
+    file_ext = os.path.splitext(file_path)[1].lower()
+    allowed_extensions = ['.mid', '.wav']
+
+    if file_ext not in allowed_extensions:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only MIDI files (.mid) can be downloaded"
+            detail=f"Only MIDI (.mid) and WAV (.wav) files can be downloaded"
         )
 
-    logger.info(f"Serving MIDI file: {file_path}")
+    # Determine media type based on extension
+    if file_ext == '.wav':
+        media_type = "audio/wav"
+    elif file_ext == '.mid':
+        media_type = "audio/midi"
+    else:
+        media_type = "application/octet-stream"
+
+    logger.info(f"Serving file: {file_path} ({media_type})")
 
     return FileResponse(
         path=file_path,
-        media_type="audio/midi",
+        media_type=media_type,
         filename=safe_filename,
         headers={
             "Content-Disposition": f"attachment; filename={safe_filename}"
