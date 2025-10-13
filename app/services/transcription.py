@@ -178,6 +178,9 @@ def transcribe_audio(
             tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
             beat_times = librosa.frames_to_time(beat_frames, sr=sr)
 
+            # Handle NaN tempo values
+            tempo = float(tempo) if not np.isnan(tempo) else 0.0
+
             logger.info(
                 f"Audio metadata: duration={audio_duration:.2f}s, tempo={tempo:.1f} BPM, beats={len(beat_times)}"
             )
@@ -201,7 +204,7 @@ def transcribe_audio(
                 "duration": float(audio_duration),
                 "tempo": float(tempo),
                 "total_beats": int(len(beat_times)),
-                "beats": beat_times.tolist() if len(beat_times) > 0 else []
+                "beats": [float(beat) for beat in beat_times] if len(beat_times) > 0 else []
             },
             "stems": stems_result,
             "processing_summary": {
