@@ -261,10 +261,17 @@ def transcribe_audio_to_midi(
                 os.makedirs(os.path.dirname(final_midi_path), exist_ok=True)
                 os.rename(yourmt3_output, final_midi_path)
                 midi_path = final_midi_path
+            else:
+                # If MIDI file is at relative path, convert to absolute
+                if not os.path.isabs(midi_path):
+                    midi_path = os.path.abspath(os.path.join(output_dir, midi_path))
 
         finally:
             # Restore working directory
             os.chdir(original_cwd)
+
+        # Ensure absolute path is returned
+        midi_path = os.path.abspath(midi_path)
 
         # Get basic stats from MIDI file
         transcription_stats = {

@@ -426,6 +426,30 @@ def process_midi_for_stem_compliance(midi_path: str, stem_type: str) -> str:
         raise RuntimeError(f"MIDI processing failed: {e}")
 
 
+def _add_program_change_event(instrument: 'pretty_midi.Instrument', program: int):
+    """
+    Add program change event at the start of an instrument track
+
+    Args:
+        instrument: PrettyMIDI Instrument object
+        program: MIDI program number (0-127)
+    """
+    import pretty_midi
+
+    # Create program change event at time 0
+    # PrettyMIDI handles program changes through the instrument.program attribute
+    # But we can also add explicit control changes for clarity
+    instrument.program = program
+
+    # Add a program change control message at time 0 (optional, for explicit clarity)
+    # MIDI Control Change 0 (Bank Select MSB) followed by Program Change
+    # This ensures DAWs recognize the instrument type immediately
+    if not instrument.is_drum:
+        # For melodic instruments, set program explicitly
+        # Note: PrettyMIDI automatically writes program change events based on instrument.program
+        logger.debug(f"Set program {program} ({pretty_midi.program_to_instrument_name(program)}) for track")
+
+
 def _process_drums_to_channel_10(midi: 'pretty_midi.PrettyMIDI') -> 'pretty_midi.PrettyMIDI':
     """Move all notes to Channel 10 (percussion) per GM specification"""
     import pretty_midi
@@ -446,6 +470,9 @@ def _process_drums_to_channel_10(midi: 'pretty_midi.PrettyMIDI') -> 'pretty_midi
             note.pitch = 79 + (note.pitch % 3)  # High percussion range
         percussion.notes.append(note)
 
+    # Set drum program (GM standard: program 0 for percussion on channel 10)
+    _add_program_change_event(percussion, 0)
+
     new_midi.instruments.append(percussion)
     logger.info(f"Drums: moved {len(all_notes)} notes to Channel 10 (GM percussion)")
 
@@ -453,7 +480,12 @@ def _process_drums_to_channel_10(midi: 'pretty_midi.PrettyMIDI') -> 'pretty_midi
 
 
 def _process_melodic_instruments(midi: 'pretty_midi.PrettyMIDI', stem_type: str) -> 'pretty_midi.PrettyMIDI':
-    """Apply GM program constraints to melodic instruments"""
+    """
+    Apply GM Level 1 program constraints to melodic instruments
+
+    Only enforces correct instrument categories per GM specification (page 5).
+    Does NOT filter notes - only enforces instrument programs.
+    """
     allowed_programs = StemInstrumentMapper.get_allowed_programs(stem_type)
     default_program = StemInstrumentMapper.get_default_program(stem_type)
 
@@ -463,16 +495,12 @@ def _process_melodic_instruments(midi: 'pretty_midi.PrettyMIDI', stem_type: str)
             instrument.notes = []
             continue
 
-        # Remap program if not allowed
+        # Remap program if not allowed (per GM spec categories)
         if instrument.program not in allowed_programs:
             logger.debug(f"Remapping program {instrument.program} -> {default_program} for {stem_type}")
             instrument.program = default_program
 
-        # Bass-specific filtering: keep only low notes
-        if stem_type.lower() == 'bass':
-            original_count = len(instrument.notes)
-            instrument.notes = [n for n in instrument.notes if n.pitch < 65]  # Below F4
-            if original_count != len(instrument.notes):
-                logger.debug(f"Bass filter: kept {len(instrument.notes)}/{original_count} low notes")
+        # Add program change event for the assigned program
+        _add_program_change_event(instrument, instrument.program)
 
     return midi
