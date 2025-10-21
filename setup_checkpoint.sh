@@ -161,7 +161,6 @@ if [ -f "amt/logs/2024/mc13_256_g4_all_v7_mt3f_sqr_rms_moe_wf4_n8k2_silu_rope_rp
     echo "Next steps:"
     echo "1. Install dependencies: pip install -r requirements.txt"
     echo "2. Start server: python -m app.main"
-    echo "   Or with Docker: docker-compose up"
 else
     echo -e "${RED}❌ Checkpoint verification failed${NC}"
     exit 1

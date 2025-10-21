@@ -31,7 +31,7 @@ class AnalysisResult(BaseModel):
     """Complete analysis result"""
     job_id: str
     song_info: Dict[str, Any] = Field(..., description="Song metadata (duration, tempo, beats)")
-    timeline: Dict[str, Any] = Field(..., description="Beat-by-beat instrument timeline")
+    stems: Dict[str, Any] = Field(..., description="Per-stem MIDI transcription results with download URLs")
     processing_summary: Optional[Dict[str, Any]] = Field(default=None, description="Processing statistics")
 
     model_config = {
@@ -39,18 +39,46 @@ class AnalysisResult(BaseModel):
             "example": {
                 "job_id": "abc123",
                 "song_info": {
+                    "filename": "song.mp3",
                     "duration": 180.5,
                     "tempo": 120,
                     "total_beats": 450
                 },
-                "timeline": {
-                    "beat_1": [
-                        {"instrument": "bass", "confidence": 0.92, "stem": "bass"}
-                    ]
+                "stems": {
+                    "bass": {
+                        "type": "midi",
+                        "stem": "bass",
+                        "midi_path": "/uploads/abc123/midi/abc123_bass.mid",
+                        "midi_url": "/api/v1/files/abc123_bass.mid",
+                        "program_range": [33, 40],
+                        "status": "processed"
+                    },
+                    "drums": {
+                        "type": "midi",
+                        "stem": "drums",
+                        "midi_path": "/uploads/abc123/midi/abc123_drums.mid",
+                        "midi_url": "/api/v1/files/abc123_drums.mid",
+                        "status": "processed"
+                    },
+                    "other": {
+                        "type": "midi",
+                        "stem": "other",
+                        "midi_path": "/uploads/abc123/midi/abc123_other.mid",
+                        "midi_url": "/api/v1/files/abc123_other.mid",
+                        "status": "processed"
+                    },
+                    "vocals": {
+                        "type": "midi",
+                        "stem": "vocals",
+                        "midi_path": "/uploads/abc123/midi/abc123_vocals.mid",
+                        "midi_url": "/api/v1/files/abc123_vocals.mid",
+                        "status": "processed"
+                    }
                 },
                 "processing_summary": {
-                    "stems_processed": 3,
-                    "total_segments": 45
+                    "stems_processed": 4,
+                    "total_midi_files": 4,
+                    "model": "YourMT3 (YPTF.MoE+Multi, 536M params)"
                 }
             }
         }

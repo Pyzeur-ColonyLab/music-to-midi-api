@@ -30,7 +30,6 @@ Transform audio files into MIDI with high accuracy using state-of-the-art deep l
 
 ⚡ **Production Ready**
 - RESTful API with comprehensive documentation
-- Docker support for easy deployment
 - Health checks and monitoring
 - GPU acceleration support
 
@@ -64,19 +63,6 @@ pip install -r requirements.txt
 
 # 5. Start server
 python -m app.main
-```
-
-### Docker
-
-```bash
-# Download checkpoint first
-./setup_checkpoint.sh
-
-# Start with Docker Compose
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
 ```
 
 Server available at: **http://localhost:8000**
@@ -137,21 +123,48 @@ Response:
 ```json
 {
   "job_id": "abc-123-def-456",
+  "song_info": {
+    "filename": "song.mp3",
+    "duration": 180.5,
+    "tempo": 120,
+    "total_beats": 450
+  },
   "stems": {
     "bass": {
-      "midi_path": "/path/to/abc-123-def-456_bass.mid",
+      "type": "midi",
+      "stem": "bass",
+      "midi_path": "/uploads/abc-123-def-456/midi/abc-123-def-456_bass.mid",
       "midi_url": "/api/v1/files/abc-123-def-456_bass.mid",
       "program_range": [33, 40],
       "status": "processed"
     },
-    "drums": { ... },
-    "other": { ... },
-    "vocals": { ... }
+    "drums": {
+      "type": "midi",
+      "stem": "drums",
+      "midi_path": "/uploads/abc-123-def-456/midi/abc-123-def-456_drums.mid",
+      "midi_url": "/api/v1/files/abc-123-def-456_drums.mid",
+      "status": "processed"
+    },
+    "other": {
+      "type": "midi",
+      "stem": "other",
+      "midi_path": "/uploads/abc-123-def-456/midi/abc-123-def-456_other.mid",
+      "midi_url": "/api/v1/files/abc-123-def-456_other.mid",
+      "status": "processed"
+    },
+    "vocals": {
+      "type": "midi",
+      "stem": "vocals",
+      "midi_path": "/uploads/abc-123-def-456/midi/abc-123-def-456_vocals.mid",
+      "midi_url": "/api/v1/files/abc-123-def-456_vocals.mid",
+      "status": "processed"
+    }
   },
   "processing_summary": {
     "stems_processed": 4,
     "total_midi_files": 4,
-    "model": "YourMT3 (YPTF.MoE+Multi, 536M params)"
+    "model": "YourMT3 (YPTF.MoE+Multi, 536M params)",
+    "separator": "Demucs htdemucs (4-stem)"
   }
 }
 ```
@@ -213,6 +226,7 @@ MIDI Files Output
 | GET | `/api/v1/status/{job_id}` | Check processing status |
 | GET | `/api/v1/results/{job_id}` | Get transcription results |
 | GET | `/api/v1/files/{filename}` | Download MIDI file |
+| DELETE | `/api/v1/jobs/{job_id}` | Clean up job files and data |
 
 ### Interactive Documentation
 
@@ -303,8 +317,6 @@ music-to-midi-api/
 ├── uploads/                   # User uploads (not in git)
 ├── logs/                      # Application logs
 ├── tests/                     # Test suite
-├── Dockerfile                 # Docker image
-├── docker-compose.yml         # Docker Compose config
 ├── requirements.txt           # Python dependencies
 └── setup_checkpoint.sh        # Checkpoint download script
 ```
@@ -336,9 +348,9 @@ SKIP_MODEL_LOADING=1 python -m app.main
 
 ## Deployment
 
-### Production Instance Deployment
+### Manual Deployment to Server Instance
 
-Complete guide for deploying to a cloud instance (AWS, GCP, DigitalOcean, Infomaniak, etc.)
+Complete guide for deploying to a server instance (Infomaniak, DigitalOcean, etc.)
 
 #### Prerequisites
 
@@ -521,29 +533,13 @@ git pull origin main
 sudo systemctl restart music-to-midi
 ```
 
-### Docker Deployment
+### Advanced Configuration
 
-```bash
-# Build
-docker build -t music-to-midi-api .
-
-# Run
-docker run -d \
-  -p 8000:8000 \
-  -v $(pwd)/uploads:/app/uploads \
-  -v $(pwd)/amt:/app/amt \
-  --name music-to-midi-api \
-  music-to-midi-api
-```
-
-### Advanced Deployment
-
-For advanced production setups, see [DEPLOYMENT.md](DEPLOYMENT.md) for:
+For advanced production configurations, see [DEPLOYMENT.md](DEPLOYMENT.md) for:
 - Nginx reverse proxy configuration
 - SSL/TLS certificates (Let's Encrypt)
-- Load balancing and scaling
 - Monitoring and alerting
-- Database integration (Redis for job queue)
+- Performance optimization
 
 ---
 
@@ -618,7 +614,6 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 - 🎵 YourMT3 integration for MIDI transcription
 - 🎚️ Demucs 4-stem separation
 - 📡 RESTful API with comprehensive endpoints
-- 🐳 Docker support
 - 📖 Complete documentation
 
 ---

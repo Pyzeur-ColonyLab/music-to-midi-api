@@ -1,6 +1,6 @@
 # Deployment Guide - Music-to-MIDI API
 
-Complete deployment guide for production and development environments.
+Complete manual deployment guide for production and development environments.
 
 ---
 
@@ -8,10 +8,9 @@ Complete deployment guide for production and development environments.
 
 1. [Quick Start](#quick-start)
 2. [Local Development](#local-development)
-3. [Docker Deployment](#docker-deployment)
-4. [Production Deployment](#production-deployment)
-5. [Cloud Platforms](#cloud-platforms)
-6. [Troubleshooting](#troubleshooting)
+3. [Production Deployment](#production-deployment)
+4. [Server Platforms](#server-platforms)
+5. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -82,55 +81,6 @@ python sanity_test.py
 
 # Run pytest suite
 pytest tests/
-```
-
----
-
-## Docker Deployment
-
-### Build and Run
-
-```bash
-# 1. Download checkpoint first
-./setup_checkpoint.sh
-
-# 2. Build image
-docker build -t music-to-midi-api .
-
-# 3. Run container
-docker run -d \
-  -p 8000:8000 \
-  -v $(pwd)/uploads:/app/uploads \
-  -v $(pwd)/amt:/app/amt \
-  --name music-to-midi-api \
-  music-to-midi-api
-```
-
-### Using Docker Compose
-
-```bash
-# Start all services
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Stop services
-docker-compose down
-```
-
-### Docker Compose with GPU
-
-Uncomment GPU section in `docker-compose.yml`:
-
-```yaml
-deploy:
-  resources:
-    reservations:
-      devices:
-        - driver: nvidia
-          count: 1
-          capabilities: [gpu]
 ```
 
 ---
@@ -215,86 +165,25 @@ sudo certbot --nginx -d yourdomain.com
 
 ---
 
-## Cloud Platforms
+## Server Platforms
 
-### AWS EC2
+### Recommended Providers
 
-**Instance Requirements**:
-- **CPU**: t3.xlarge (4 vCPU, 16GB RAM) or larger
-- **GPU** (optional): p3.2xlarge (1x NVIDIA V100, 61GB RAM)
-- **Storage**: 20GB+ EBS volume
+**Infomaniak (Recommended)**:
+- Swiss cloud hosting with excellent privacy
+- VPS instances from 8GB RAM
+- Competitive pricing
+- Good European network performance
 
-**Setup**:
-
-```bash
-# 1. SSH into instance
-ssh -i your-key.pem ubuntu@your-instance-ip
-
-# 2. Install dependencies
-sudo apt-get update
-sudo apt-get install -y python3.9 python3-pip ffmpeg libsndfile1 nginx
-
-# 3. Clone and setup
-git clone <your-repo-url>
-cd music-to-midi-api
-./setup_checkpoint.sh
-pip install -r requirements.txt
-
-# 4. Setup systemd service
-sudo cp deployment/music-to-midi-api.service /etc/systemd/system/
-sudo systemctl enable music-to-midi-api
-sudo systemctl start music-to-midi-api
-```
-
-### Google Cloud Platform (GCP)
-
-**Compute Engine**:
-
-```bash
-# Create instance with GPU
-gcloud compute instances create music-to-midi-api \
-  --zone=us-central1-a \
-  --machine-type=n1-standard-4 \
-  --accelerator=type=nvidia-tesla-t4,count=1 \
-  --boot-disk-size=50GB \
-  --image-family=ubuntu-2004-lts \
-  --image-project=ubuntu-os-cloud
-
-# Install CUDA drivers (if using GPU)
-gcloud compute ssh music-to-midi-api --zone=us-central1-a
-sudo /opt/deeplearning/install-driver.sh
-```
-
-### Azure
-
-**Virtual Machine**:
-
-```bash
-# Create VM
-az vm create \
-  --resource-group myResourceGroup \
-  --name music-to-midi-api \
-  --image UbuntuLTS \
-  --size Standard_NC6 \
-  --generate-ssh-keys
-
-# Open port 8000
-az vm open-port --port 8000 --resource-group myResourceGroup --name music-to-midi-api
-```
-
-### DigitalOcean
-
-**Droplet**:
-- **Size**: General Purpose, 4GB+ RAM ($24/month)
+**DigitalOcean**:
+- **Size**: General Purpose, 8GB+ RAM
 - **Image**: Ubuntu 22.04 LTS
 - **Add-ons**: Backups recommended
 
-### Heroku
-
-**Not Recommended** due to:
-- 512MB RAM limit (too low for YourMT3)
-- 30-second request timeout (too short for processing)
-- No GPU support
+**Other Compatible Providers**:
+- Hetzner, OVH, Scaleway, Linode
+- Any VPS provider supporting Ubuntu 22.04+
+- Minimum 8GB RAM, 4 CPU cores recommended
 
 ---
 
@@ -440,49 +329,6 @@ Already implemented:
 
 ---
 
-## Scaling
-
-### Horizontal Scaling
-
-**Load Balancer** (Nginx):
-
-```nginx
-upstream api_backend {
-    server localhost:8000;
-    server localhost:8001;
-    server localhost:8002;
-}
-
-server {
-    location / {
-        proxy_pass http://api_backend;
-    }
-}
-```
-
-Start multiple instances:
-
-```bash
-# Instance 1
-gunicorn app.main:app --bind 0.0.0.0:8000
-
-# Instance 2
-gunicorn app.main:app --bind 0.0.0.0:8001
-
-# Instance 3
-gunicorn app.main:app --bind 0.0.0.0:8002
-```
-
-### Queue System (Redis + Celery)
-
-For async processing:
-
-```bash
-pip install celery redis
-```
-
----
-
 ## Backup & Recovery
 
 ### Data Backup
@@ -559,26 +405,15 @@ kill -9 <PID>
 
 ## Cost Estimation
 
-### AWS EC2
+### Typical VPS Costs
 
-| Instance Type | vCPU | RAM | GPU | Cost/Hour | Cost/Month |
-|--------------|------|-----|-----|-----------|------------|
-| t3.xlarge | 4 | 16GB | - | $0.17 | ~$120 |
-| p3.2xlarge | 8 | 61GB | 1x V100 | $3.06 | ~$2,200 |
+| Provider | vCPU | RAM | Storage | Cost/Month |
+|----------|------|-----|---------|------------|
+| Infomaniak | 4 | 8GB | 160GB | €15-25 |
+| DigitalOcean | 4 | 8GB | 160GB | $48 |
+| Hetzner | 4 | 16GB | 160GB | €20 |
 
-### GCP Compute Engine
-
-| Machine Type | vCPU | RAM | GPU | Cost/Hour | Cost/Month |
-|-------------|------|-----|-----|-----------|------------|
-| n1-standard-4 | 4 | 15GB | - | $0.19 | ~$140 |
-| n1-standard-4 + T4 | 4 | 15GB | 1x T4 | $0.54 | ~$390 |
-
-### DigitalOcean
-
-| Droplet Size | vCPU | RAM | Cost/Month |
-|-------------|------|-----|------------|
-| General Purpose | 4 | 8GB | $48 |
-| General Purpose | 4 | 16GB | $96 |
+*Prices approximate and subject to change*
 
 ---
 
