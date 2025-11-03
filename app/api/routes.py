@@ -234,7 +234,8 @@ async def get_results(job_id: str):
     return AnalysisResult(
         job_id=job_id,
         song_info=result.get("song_info", {}),
-        timeline=result.get("timeline", {}),
+        stems=result.get("stems", {}),
+        instruments=result.get("instruments", []),
         processing_summary=result.get("processing_summary", {})
     )
 
