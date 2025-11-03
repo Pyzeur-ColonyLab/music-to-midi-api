@@ -160,6 +160,50 @@ def transcribe_audio(
         if progress_callback:
             progress_callback(90, "All stems transcribed")
 
+        # Step 2.5: Split MIDI files by instruments (NEW FEATURE)
+        if progress_callback:
+            progress_callback(91, "Splitting MIDI files by instruments...")
+
+        from app.services.midi_processor import split_midi_by_instruments
+
+        # For each successfully processed stem, split its MIDI file by instruments
+        instruments_by_stem = {}  # stem_name -> [instrument_files]
+
+        for stem_name, stem_result in stems_result.items():
+            # Only split successful stems with MIDI files
+            if stem_result.get('status') != 'failed' and stem_result.get('midi_path'):
+                try:
+                    midi_path = stem_result['midi_path']
+
+                    # Create instruments subdirectory for this stem
+                    instruments_dir = f"uploads/{job_id}/instruments/{stem_name}"
+                    os.makedirs(instruments_dir, exist_ok=True)
+
+                    # Split the stem MIDI into individual instrument files
+                    instrument_files = split_midi_by_instruments(
+                        midi_path=midi_path,
+                        output_dir=instruments_dir,
+                        stem_name=stem_name
+                    )
+
+                    # Store instrument files in stem result
+                    instruments_by_stem[stem_name] = instrument_files
+                    stem_result['instruments'] = instrument_files
+                    stem_result['instruments_count'] = len(instrument_files)
+
+                    logger.info(
+                        f"✅ Split {stem_name} MIDI into {len(instrument_files)} instruments"
+                    )
+
+                except Exception as e:
+                    logger.error(f"Failed to split {stem_name} MIDI by instruments: {e}")
+                    # Non-critical error - continue without instrument splitting
+                    stem_result['instruments'] = []
+                    stem_result['instruments_count'] = 0
+            else:
+                stem_result['instruments'] = []
+                stem_result['instruments_count'] = 0
+
         # Step 3: Calculate audio metadata (duration, tempo, beats)
         if progress_callback:
             progress_callback(92, "Calculating audio metadata...")
@@ -195,6 +239,24 @@ def transcribe_audio(
             progress_callback(95, "Compiling results...")
 
         # Step 4: Compile final result
+        # Compile list of all unique instruments across all stems
+        all_instruments = []
+        instrument_families = set()
+
+        for stem_name, instrument_list in instruments_by_stem.items():
+            for inst in instrument_list:
+                all_instruments.append({
+                    "instrument_name": inst['instrument_name'],
+                    "family": inst['family'],
+                    "program": inst['program'],
+                    "source_stem": stem_name,
+                    "midi_filename": inst['midi_filename'],
+                    "midi_path": inst['midi_path'],
+                    "note_count": inst['note_count'],
+                    "duration": inst['duration']
+                })
+                instrument_families.add(inst['family'])
+
         result = {
             "job_id": job_id,
             "song_info": {
@@ -207,12 +269,15 @@ def transcribe_audio(
                 "beats": [float(beat) for beat in beat_times] if len(beat_times) > 0 else []
             },
             "stems": stems_result,
+            "instruments": all_instruments,  # NEW: All detected instruments
             "processing_summary": {
                 "stems_processed": len(stems_result),
                 "total_midi_files": sum(
                     1 for s in stems_result.values()
                     if s.get('midi_path') is not None
                 ),
+                "total_instruments": len(all_instruments),  # NEW
+                "unique_families": sorted(list(instrument_families)),  # NEW
                 "model": "YourMT3 (YPTF.MoE+Multi, 536M params)",
                 "separator": "Demucs htdemucs (4-stem)"
             }
