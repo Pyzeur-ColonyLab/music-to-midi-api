@@ -867,12 +867,12 @@ def split_midi_by_instruments(
             result_files.append({
                 "instrument_name": instrument_name,
                 "family": family,
-                "program": program,
+                "program": int(program) if program is not None else None,
                 "midi_path": output_path,
                 "midi_filename": output_filename,
-                "note_count": len(notes),
-                "duration": duration,
-                "is_drum": is_drum,
+                "note_count": int(len(notes)),
+                "duration": float(duration),
+                "is_drum": bool(is_drum),
             })
 
             logger.info(
