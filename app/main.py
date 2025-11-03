@@ -149,11 +149,15 @@ async def shutdown_event():
 
 if __name__ == "__main__":
     import uvicorn
+    import os
+
+    # Enable auto-reload only in development (set ENABLE_RELOAD=1 for development)
+    enable_reload = os.getenv('ENABLE_RELOAD', '0') == '1'
 
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",
         port=8000,
-        reload=True,
+        reload=enable_reload,
         log_level="info"
     )
