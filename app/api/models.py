@@ -31,7 +31,7 @@ class AnalysisResult(BaseModel):
     """Complete analysis result"""
     job_id: str
     song_info: Dict[str, Any] = Field(..., description="Song metadata (duration, tempo, beats)")
-    stems: Dict[str, Any] = Field(..., description="Per-stem MIDI transcription results with download URLs")
+    stems: Optional[Dict[str, Any]] = Field(default=None, description="Per-stem MIDI transcription results with download URLs")
     instruments: Optional[List[Dict[str, Any]]] = Field(default=None, description="All detected instruments across all stems")
     processing_summary: Optional[Dict[str, Any]] = Field(default=None, description="Processing statistics")
 
