@@ -259,15 +259,31 @@ async def download_file(filename: str):
     # Prevent path traversal attacks
     safe_filename = os.path.basename(filename)
 
-    # Search in uploads directory for files
-    uploads_dir = "uploads"
+    # Extract job_id from filename (format: {job_id}_instrument.mid or {job_id}_stem.wav)
+    # Job IDs are UUIDs: 8-4-4-4-12 hex digits
+    import re
+    job_id_match = re.match(r'^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})_', safe_filename)
 
-    # Check all subdirectories for the file
-    file_path = None
-    for root, dirs, files in os.walk(uploads_dir):
-        if safe_filename in files:
-            file_path = os.path.join(root, safe_filename)
-            break
+    if job_id_match:
+        # Filename has job_id prefix - search only in that job's directory
+        job_id = job_id_match.group(1)
+        job_dir = f"uploads/{job_id}"
+
+        # Search only in this job's directory to prevent cross-job file pollution
+        file_path = None
+        if os.path.exists(job_dir):
+            for root, dirs, files in os.walk(job_dir):
+                if safe_filename in files:
+                    file_path = os.path.join(root, safe_filename)
+                    break
+    else:
+        # No job_id prefix - search entire uploads directory (legacy support)
+        uploads_dir = "uploads"
+        file_path = None
+        for root, dirs, files in os.walk(uploads_dir):
+            if safe_filename in files:
+                file_path = os.path.join(root, safe_filename)
+                break
 
     if not file_path or not os.path.exists(file_path):
         raise HTTPException(
@@ -321,13 +337,13 @@ async def cleanup_job(job_id: str):
         os.remove(job["file_path"])
         logger.info(f"Deleted file: {job['file_path']}")
 
-    # Remove MIDI directory if it exists
+    # Remove entire job directory (includes midi, instruments, stems subdirectories)
     job_id_clean = job_id.split('_')[0] if '_' in job_id else job_id
-    midi_dir = f"uploads/{job_id_clean}/midi"
-    if os.path.exists(midi_dir):
+    job_dir = f"uploads/{job_id_clean}"
+    if os.path.exists(job_dir):
         import shutil
-        shutil.rmtree(midi_dir)
-        logger.info(f"Deleted MIDI directory: {midi_dir}")
+        shutil.rmtree(job_dir)
+        logger.info(f"Deleted job directory: {job_dir}")
 
     # Remove job from storage
     del job_storage[job_id]
