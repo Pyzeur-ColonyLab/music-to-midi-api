@@ -29,6 +29,8 @@ def transcribe_audio_direct(
     audio_path: str,
     job_id: str,
     confidence_threshold: float = 0.1,
+    onset_tolerance: float = 0.05,
+    batch_size: int = 8,
     progress_callback: Optional[Callable[[int, str], None]] = None
 ) -> Dict[str, Any]:
     """
@@ -126,7 +128,9 @@ def transcribe_audio_direct(
             audio_path=audio_path,
             output_dir=midi_dir,
             track_name=f"{job_id}_full",
-            model=model
+            model=model,
+            onset_tolerance=onset_tolerance,
+            batch_size=batch_size
         )
 
         if progress_callback:
@@ -265,6 +269,8 @@ def transcribe_audio(
     audio_path: str,
     job_id: str,
     confidence_threshold: float = 0.1,
+    onset_tolerance: float = 0.05,
+    batch_size: int = 8,
     progress_callback: Optional[Callable[[int, str], None]] = None
 ) -> Dict[str, Any]:
     """
@@ -318,6 +324,8 @@ def transcribe_audio(
             audio_path=audio_path,
             job_id=job_id,
             confidence_threshold=confidence_threshold,
+            onset_tolerance=onset_tolerance,
+            batch_size=batch_size,
             progress_callback=progress_callback
         )
 

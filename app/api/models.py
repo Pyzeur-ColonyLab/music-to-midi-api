@@ -92,7 +92,19 @@ class PredictionRequest(BaseModel):
         default=0.1,
         ge=0.0,
         le=1.0,
-        description="Minimum confidence threshold for predictions"
+        description="Minimum confidence threshold for predictions (0.0-1.0). Lower = more notes. Try 0.01-0.05 for more complete transcription."
+    )
+    onset_tolerance: Optional[float] = Field(
+        default=0.05,
+        ge=0.001,
+        le=0.5,
+        description="Note onset detection tolerance in seconds (default=0.05). Controls timing precision. Try 0.1-0.2 for more lenient timing."
+    )
+    batch_size: Optional[int] = Field(
+        default=8,
+        ge=1,
+        le=32,
+        description="Inference batch size (default=8). Higher = faster but more memory. Try 4 for memory issues or 16 for speed."
     )
     use_stems: Optional[bool] = Field(
         default=True,
@@ -114,7 +126,9 @@ class PredictionRequest(BaseModel):
     model_config = {
         "json_schema_extra": {
             "example": {
-                "confidence_threshold": 0.2,
+                "confidence_threshold": 0.05,
+                "onset_tolerance": 0.1,
+                "batch_size": 8,
                 "use_stems": True,
                 "output_format": "both"
             }

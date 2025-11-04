@@ -158,11 +158,79 @@ def get_yourmt3_model() -> Optional[Any]:
     return _yourmt3_model
 
 
+def transcribe_with_params(model, audio_info, batch_size=8, onset_tolerance=0.05):
+    """
+    Custom transcribe function with configurable parameters
+
+    This is a wrapper around the original transcribe function from model_helper.py
+    that allows us to pass custom batch_size and onset_tolerance.
+
+    Note: onset_tolerance is logged but not used in the current YourMT3 implementation.
+    It's exposed for future compatibility if YourMT3 adds this parameter.
+    """
+    # Import required modules
+    from utils.utils import Timer
+    from utils.audio import slice_padded_array
+    from utils.note2event import mix_notes
+    from utils.event2note import merge_zipped_note_events_and_ties_to_notes
+    from utils.utils import write_model_output_as_midi
+    from collections import Counter
+
+    t = Timer()
+
+    # Converting Audio
+    t.start()
+    audio, sr = torchaudio.load(uri=audio_info['filepath'])
+    audio = torch.mean(audio, dim=0).unsqueeze(0)
+    audio = torchaudio.functional.resample(audio, sr, model.audio_cfg['sample_rate'])
+    audio_segments = slice_padded_array(audio, model.audio_cfg['input_frames'], model.audio_cfg['input_frames'])
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    audio_segments = torch.from_numpy(audio_segments.astype('float32')).to(device).unsqueeze(1)
+    t.stop(); t.print_elapsed_time("converting audio");
+
+    logger.info(f"   Audio segments: {audio_segments.shape[0]} segments")
+    logger.info(f"   Batch size: {batch_size} (configurable)")
+    logger.info(f"   Onset tolerance: {onset_tolerance}s (for future use)")
+
+    # Inference with configurable batch size
+    t.start()
+    pred_token_arr, _ = model.inference_file(bsz=batch_size, audio_segments=audio_segments)
+    t.stop(); t.print_elapsed_time("model inference");
+
+    # Post-processing
+    t.start()
+    num_channels = model.task_manager.num_decoding_channels
+    n_items = audio_segments.shape[0]
+    start_secs_file = [model.audio_cfg['input_frames'] * i / model.audio_cfg['sample_rate'] for i in range(n_items)]
+    pred_notes_in_file = []
+    n_err_cnt = Counter()
+    for ch in range(num_channels):
+        pred_token_arr_ch = [arr[:, ch, :] for arr in pred_token_arr]
+        zipped_note_events_and_tie, list_events, ne_err_cnt = model.task_manager.detokenize_list_batches(
+            pred_token_arr_ch, start_secs_file, return_events=True)
+        pred_notes_ch, n_err_cnt_ch = merge_zipped_note_events_and_ties_to_notes(zipped_note_events_and_tie)
+        pred_notes_in_file.append(pred_notes_ch)
+        n_err_cnt += n_err_cnt_ch
+    pred_notes = mix_notes(pred_notes_in_file)
+
+    # Write MIDI
+    write_model_output_as_midi(pred_notes, './', audio_info['track_name'], model.midi_output_inverse_vocab)
+    t.stop(); t.print_elapsed_time("post processing");
+    midifile = os.path.join('./model_output/', audio_info['track_name'] + '.mid')
+    assert os.path.exists(midifile)
+
+    logger.info(f"   Total notes generated: {len(pred_notes)}")
+
+    return midifile
+
+
 def transcribe_audio_to_midi(
     audio_path: str,
     output_dir: str,
     track_name: str,
-    model: Optional[Any] = None
+    model: Optional[Any] = None,
+    onset_tolerance: float = 0.05,
+    batch_size: int = 8
 ) -> Tuple[str, Dict[str, Any]]:
     """
     Transcribe audio file to MIDI using YourMT3
@@ -172,6 +240,8 @@ def transcribe_audio_to_midi(
         output_dir: Directory to save MIDI file
         track_name: Name for output MIDI file (without .mid extension)
         model: YourMT3 model instance (uses cached if None)
+        onset_tolerance: Note onset detection tolerance in seconds (default=0.05)
+        batch_size: Inference batch size (default=8)
 
     Returns:
         Tuple of (midi_path, transcription_stats)
@@ -249,8 +319,8 @@ def transcribe_audio_to_midi(
         os.chdir(output_dir)
 
         try:
-            # Transcribe using YourMT3
-            midi_path = transcribe(model, audio_info)
+            # Transcribe using YourMT3 with custom parameters
+            midi_path = transcribe_with_params(model, audio_info, batch_size=batch_size, onset_tolerance=onset_tolerance)
 
             # Move MIDI file to proper location if needed
             # YourMT3 outputs to ./model_output/{track_name}.mid

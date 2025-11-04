@@ -143,10 +143,13 @@ async def predict_instruments(job_id: str, request: PredictionRequest = Predicti
 
         # Run transcription
         logger.info(f"Starting transcription for job {job_id}")
+        logger.info(f"   Parameters: confidence={request.confidence_threshold}, onset_tolerance={request.onset_tolerance}, batch_size={request.batch_size}")
         analysis_result = transcribe_audio(
             audio_path=job["file_path"],
             job_id=job_id,
             confidence_threshold=request.confidence_threshold,
+            onset_tolerance=request.onset_tolerance,
+            batch_size=request.batch_size,
             progress_callback=update_progress
         )
 
