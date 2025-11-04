@@ -127,7 +127,7 @@ async def startup_event():
 
         # Check bypass mode
         bypass_demucs = os.getenv('BYPASS_DEMUCS', '0') == '1'
-        processing_mode = "Direct (bypassing Demucs)" if bypass_demucs else "Stem-based (Demucs + YourMT3)"
+        processing_mode = "Hybrid (Demucs stems + YourMT3 on full audio)" if bypass_demucs else "Stem-based (Demucs + YourMT3 per stem)"
 
         logger.info("=" * 60)
         logger.info("✅ Music-to-MIDI API Ready!")

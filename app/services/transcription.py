@@ -32,16 +32,18 @@ def transcribe_audio_direct(
     progress_callback: Optional[Callable[[int, str], None]] = None
 ) -> Dict[str, Any]:
     """
-    Transcribe audio file directly with YourMT3 (bypassing Demucs stem separation)
+    Transcribe audio file with hybrid approach: Demucs stems + YourMT3 on full audio
 
-    Pipeline (Direct Mode):
-    1. Load and analyze audio file
-    2. Transcribe full audio with YourMT3 to generate single MIDI
+    Pipeline (Hybrid Mode):
+    1. Separate audio into stems using Demucs (for backend compatibility)
+    2. Transcribe FULL AUDIO (not stems) with YourMT3 to generate single MIDI
     3. Split MIDI by instruments (if multiple programs detected)
-    4. Return comprehensive analysis results with MIDI URLs
+    4. Return comprehensive analysis results with stem WAVs and MIDI
 
-    This mode is faster but may reduce quality for complex multi-instrument tracks.
-    Use when processing time is more important than per-stem accuracy.
+    This mode provides:
+    - Stem WAV files for backend orchestrator
+    - Faster processing (single YourMT3 call vs 4x per-stem)
+    - Unified MIDI transcription from full mix
 
     Args:
         audio_path: Path to audio file (mp3, wav, flac, m4a)
@@ -52,8 +54,8 @@ def transcribe_audio_direct(
     Returns:
         Dictionary containing:
             - song_info: Duration, tempo, beats, etc.
-            - stems: Empty dict (no stems in direct mode)
-            - instruments: Detected instruments from MIDI
+            - stems: Stem info with WAV paths (no per-stem MIDIs)
+            - instruments: Detected instruments from full audio MIDI
             - processing_summary: Stats about processing
 
     Raises:
@@ -71,15 +73,50 @@ def transcribe_audio_direct(
     if model is None:
         raise ValueError("YourMT3 model not loaded. Initialize model on startup.")
 
-    logger.info(f"Starting DIRECT transcription (bypassing Demucs): {audio_path} (Job: {job_id})")
+    logger.info(f"Starting HYBRID transcription: Demucs stems + YourMT3 on full audio: {audio_path} (Job: {job_id})")
 
     if progress_callback:
-        progress_callback(0, "Starting audio analysis (direct mode)...")
+        progress_callback(0, "Starting audio analysis (hybrid mode)...")
 
     try:
-        # Step 1: Transcribe full audio directly with YourMT3 (0% → 70%)
+        # Step 1: Separate stems using Demucs (0% → 30%)
         if progress_callback:
-            progress_callback(5, "Transcribing full audio with YourMT3...")
+            progress_callback(5, "Separating audio stems (for backend)...")
+
+        stems_dir = f"uploads/{job_id}/stems"
+        os.makedirs(stems_dir, exist_ok=True)
+
+        stem_paths = separate_stems(
+            audio_path=audio_path,
+            output_dir=stems_dir,
+            model_name="htdemucs"  # 4-stem Demucs
+        )
+
+        # Create symlinks/copies with job_id prefix for frontend compatibility
+        import shutil
+        for stem_name, stem_path in list(stem_paths.items()):
+            prefixed_filename = f"{job_id}_{stem_name}.wav"
+            prefixed_path = os.path.join(stems_dir, prefixed_filename)
+
+            try:
+                # Create symlink (preferred on Unix systems)
+                if os.name != 'nt':  # Unix/Linux/Mac
+                    if not os.path.exists(prefixed_path):
+                        os.symlink(os.path.basename(stem_path), prefixed_path)
+                else:  # Windows - use copy
+                    if not os.path.exists(prefixed_path):
+                        shutil.copy2(stem_path, prefixed_path)
+
+                logger.info(f"   Created frontend-compatible path: {prefixed_filename}")
+            except Exception as e:
+                logger.warning(f"Could not create prefixed stem file: {e}")
+
+        if progress_callback:
+            progress_callback(30, "Stems separated successfully")
+
+        # Step 2: Transcribe FULL AUDIO (not stems) with YourMT3 (30% → 70%)
+        if progress_callback:
+            progress_callback(35, "Transcribing full audio with YourMT3...")
 
         midi_dir = f"uploads/{job_id}/midi"
         os.makedirs(midi_dir, exist_ok=True)
@@ -167,7 +204,7 @@ def transcribe_audio_direct(
                 "instrument_name": inst['instrument_name'],
                 "family": inst['family'],
                 "program": inst['program'],
-                "source_stem": "full",  # No stem separation in direct mode
+                "source_stem": "full",  # Transcribed from full audio
                 "midi_filename": inst['midi_filename'],
                 "midi_path": inst['midi_path'],
                 "note_count": inst['note_count'],
@@ -175,41 +212,53 @@ def transcribe_audio_direct(
             })
             instrument_families.add(inst['family'])
 
+        # Create stems result with WAV paths (but no per-stem MIDIs)
+        stems_result = {}
+        for stem_name, stem_path in stem_paths.items():
+            stems_result[stem_name] = {
+                "type": "audio",
+                "stem": stem_name,
+                "audio_path": stem_path,
+                "status": "processed",
+                "midi_path": None,  # No per-stem MIDI in hybrid mode
+                "instruments": []  # All instruments from full audio
+            }
+
         result = {
             "job_id": job_id,
             "song_info": {
                 "filename": audio_file.name,
                 "file_path": str(audio_file),
-                "stems_separated": 0,  # No stem separation in direct mode
+                "stems_separated": len(stem_paths),  # Stems generated
                 "duration": float(audio_duration),
                 "tempo": float(tempo),
                 "total_beats": int(len(beat_times)),
                 "beats": [float(beat) for beat in beat_times] if len(beat_times) > 0 else []
             },
-            "stems": {},  # No stems in direct mode
+            "stems": stems_result,  # Stem WAV files available
             "instruments": all_instruments,
             "processing_summary": {
-                "stems_processed": 0,
-                "total_midi_files": 1,  # Single MIDI file in direct mode
+                "stems_processed": len(stem_paths),  # Stems were created
+                "total_midi_files": 1,  # Single MIDI file from full audio
                 "total_instruments": len(all_instruments),
                 "unique_families": sorted(list(instrument_families)),
                 "model": "YourMT3 (YPTF.MoE+Multi, 536M params)",
-                "separator": "None (direct mode)",
-                "mode": "direct"  # Indicate direct mode
+                "separator": "Demucs htdemucs (4-stem)",
+                "mode": "hybrid"  # Indicate hybrid mode
             }
         }
 
-        logger.info(f"Direct transcription completed successfully for job {job_id}")
+        logger.info(f"Hybrid transcription completed successfully for job {job_id}")
         if progress_callback:
-            progress_callback(100, "Transcription completed (direct mode)")
+            progress_callback(100, "Transcription completed (hybrid mode)")
 
         return result
 
     except Exception as e:
-        logger.error(f"Direct transcription failed for job {job_id}: {e}")
+        logger.error(f"Hybrid transcription failed for job {job_id}: {e}")
         if progress_callback:
             progress_callback(-1, f"Transcription failed: {str(e)}")
-        raise RuntimeError(f"Direct transcription failed: {e}")
+        raise RuntimeError(f"Hybrid transcription failed: {e}")
 
 
 def transcribe_audio(
@@ -227,14 +276,15 @@ def transcribe_audio(
     3. Process each stem with YourMT3 to generate MIDI
     4. Return comprehensive analysis results with MIDI URLs
 
-    Pipeline (Direct Mode - BYPASS_DEMUCS=1):
-    1. Load and analyze audio file
-    2. Transcribe full audio directly with YourMT3
+    Pipeline (Hybrid Mode - BYPASS_DEMUCS=1):
+    1. Separate audio into stems using Demucs (for backend compatibility)
+    2. Transcribe FULL AUDIO (not stems) with YourMT3 to generate single MIDI
     3. Split MIDI by instruments
-    4. Return comprehensive analysis results
+    4. Return comprehensive analysis results with stem WAVs and MIDI
 
-    Set BYPASS_DEMUCS=1 to skip stem separation and transcribe directly.
-    Direct mode is faster but may reduce quality for multi-instrument tracks.
+    Set BYPASS_DEMUCS=1 to enable hybrid mode.
+    Hybrid mode provides stem WAV files for backend while using faster single
+    YourMT3 transcription on full audio instead of per-stem transcription.
 
     Args:
         audio_path: Path to audio file (mp3, wav, flac, m4a)
@@ -263,7 +313,7 @@ def transcribe_audio(
     bypass_demucs = should_bypass_demucs()
 
     if bypass_demucs:
-        logger.info("BYPASS_DEMUCS enabled - using direct transcription mode")
+        logger.info("BYPASS_DEMUCS enabled - using hybrid transcription mode")
         return transcribe_audio_direct(
             audio_path=audio_path,
             job_id=job_id,
