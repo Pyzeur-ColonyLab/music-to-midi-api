@@ -8,49 +8,58 @@ import os
 from typing import Dict, Any, Optional, Callable
 from pathlib import Path
 
-from app.services.yourmt3_service import get_yourmt3_model
+from app.services.yourmt3_service import get_yourmt3_model, transcribe_audio_to_midi
 from app.services.stem_processors import create_stem_processor
 from app.services.demucs_separator import separate_stems
 
 logger = logging.getLogger(__name__)
 
 
-def transcribe_audio(
+def should_bypass_demucs() -> bool:
+    """
+    Check if Demucs stem separation should be bypassed
+
+    Returns:
+        True if BYPASS_DEMUCS=1, False otherwise
+    """
+    return os.getenv('BYPASS_DEMUCS', '0') == '1'
+
+
+def transcribe_audio_direct(
     audio_path: str,
     job_id: str,
     confidence_threshold: float = 0.1,
     progress_callback: Optional[Callable[[int, str], None]] = None
 ) -> Dict[str, Any]:
     """
-    Transcribe audio file to MIDI using YourMT3 with stem-based processing
+    Transcribe audio file directly with YourMT3 (bypassing Demucs stem separation)
 
-    Pipeline:
+    Pipeline (Direct Mode):
     1. Load and analyze audio file
-    2. Separate into stems (bass, drums, other, vocals) using Demucs
-    3. Process each stem with YourMT3 to generate MIDI
+    2. Transcribe full audio with YourMT3 to generate single MIDI
+    3. Split MIDI by instruments (if multiple programs detected)
     4. Return comprehensive analysis results with MIDI URLs
+
+    This mode is faster but may reduce quality for complex multi-instrument tracks.
+    Use when processing time is more important than per-stem accuracy.
 
     Args:
         audio_path: Path to audio file (mp3, wav, flac, m4a)
         job_id: Unique job identifier for organizing outputs
         confidence_threshold: Minimum confidence for predictions (0.0-1.0)
         progress_callback: Optional callback function(progress: int, message: str)
-                          Called with progress percentage and status message
 
     Returns:
         Dictionary containing:
             - song_info: Duration, tempo, beats, etc.
-            - stems: Individual stem MIDI results with download URLs
+            - stems: Empty dict (no stems in direct mode)
+            - instruments: Detected instruments from MIDI
             - processing_summary: Stats about processing
 
     Raises:
         FileNotFoundError: If audio file not found
         RuntimeError: If transcription fails
         ValueError: If model not loaded
-
-    Example:
-        >>> result = transcribe_audio("song.mp3", job_id="abc-123")
-        >>> print(f"Bass MIDI: {result['stems']['bass']['midi_url']}")
     """
     # Validate audio file exists
     audio_file = Path(audio_path)
@@ -62,7 +71,218 @@ def transcribe_audio(
     if model is None:
         raise ValueError("YourMT3 model not loaded. Initialize model on startup.")
 
-    logger.info(f"Starting transcription: {audio_path} (Job: {job_id})")
+    logger.info(f"Starting DIRECT transcription (bypassing Demucs): {audio_path} (Job: {job_id})")
+
+    if progress_callback:
+        progress_callback(0, "Starting audio analysis (direct mode)...")
+
+    try:
+        # Step 1: Transcribe full audio directly with YourMT3 (0% → 70%)
+        if progress_callback:
+            progress_callback(5, "Transcribing full audio with YourMT3...")
+
+        midi_dir = f"uploads/{job_id}/midi"
+        os.makedirs(midi_dir, exist_ok=True)
+
+        # Transcribe full audio file
+        midi_path, transcription_stats = transcribe_audio_to_midi(
+            audio_path=audio_path,
+            output_dir=midi_dir,
+            track_name=f"{job_id}_full",
+            model=model
+        )
+
+        if progress_callback:
+            progress_callback(70, "Full audio transcribed to MIDI")
+
+        logger.info(f"✅ Direct transcription complete: {midi_path}")
+
+        # Step 2: Split MIDI by instruments (70% → 85%)
+        if progress_callback:
+            progress_callback(71, "Splitting MIDI by instruments...")
+
+        from app.services.midi_processor import split_midi_by_instruments
+
+        # Create instruments directory
+        instruments_dir = f"uploads/{job_id}/instruments/full"
+        os.makedirs(instruments_dir, exist_ok=True)
+
+        # Split the MIDI into individual instrument files
+        try:
+            instrument_files = split_midi_by_instruments(
+                midi_path=midi_path,
+                output_dir=instruments_dir,
+                stem_name="full"
+            )
+
+            logger.info(f"✅ Split full MIDI into {len(instrument_files)} instruments")
+
+        except Exception as e:
+            logger.error(f"Failed to split MIDI by instruments: {e}")
+            instrument_files = []
+
+        if progress_callback:
+            progress_callback(85, "MIDI split by instruments")
+
+        # Step 3: Calculate audio metadata (85% → 92%)
+        if progress_callback:
+            progress_callback(86, "Calculating audio metadata...")
+
+        try:
+            import librosa
+            import numpy as np
+
+            # Load audio for analysis
+            y, sr = librosa.load(audio_path, sr=22050, mono=True)
+
+            # Calculate duration
+            audio_duration = librosa.get_duration(y=y, sr=sr)
+
+            # Detect tempo and beats
+            tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
+            beat_times = librosa.frames_to_time(beat_frames, sr=sr)
+
+            # Handle NaN tempo values
+            tempo = float(tempo) if not np.isnan(tempo) else 0.0
+
+            logger.info(
+                f"Audio metadata: duration={audio_duration:.2f}s, tempo={tempo:.1f} BPM, beats={len(beat_times)}"
+            )
+
+        except Exception as e:
+            logger.warning(f"Could not calculate metadata: {e}. Using defaults.")
+            audio_duration = 0.0
+            tempo = 0.0
+            beat_times = []
+
+        if progress_callback:
+            progress_callback(92, "Compiling results...")
+
+        # Step 4: Compile final result
+        all_instruments = []
+        instrument_families = set()
+
+        for inst in instrument_files:
+            all_instruments.append({
+                "instrument_name": inst['instrument_name'],
+                "family": inst['family'],
+                "program": inst['program'],
+                "source_stem": "full",  # No stem separation in direct mode
+                "midi_filename": inst['midi_filename'],
+                "midi_path": inst['midi_path'],
+                "note_count": inst['note_count'],
+                "duration": inst['duration']
+            })
+            instrument_families.add(inst['family'])
+
+        result = {
+            "job_id": job_id,
+            "song_info": {
+                "filename": audio_file.name,
+                "file_path": str(audio_file),
+                "stems_separated": 0,  # No stem separation in direct mode
+                "duration": float(audio_duration),
+                "tempo": float(tempo),
+                "total_beats": int(len(beat_times)),
+                "beats": [float(beat) for beat in beat_times] if len(beat_times) > 0 else []
+            },
+            "stems": {},  # No stems in direct mode
+            "instruments": all_instruments,
+            "processing_summary": {
+                "stems_processed": 0,
+                "total_midi_files": 1,  # Single MIDI file in direct mode
+                "total_instruments": len(all_instruments),
+                "unique_families": sorted(list(instrument_families)),
+                "model": "YourMT3 (YPTF.MoE+Multi, 536M params)",
+                "separator": "None (direct mode)",
+                "mode": "direct"  # Indicate direct mode
+            }
+        }
+
+        logger.info(f"Direct transcription completed successfully for job {job_id}")
+        if progress_callback:
+            progress_callback(100, "Transcription completed (direct mode)")
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Direct transcription failed for job {job_id}: {e}")
+        if progress_callback:
+            progress_callback(-1, f"Transcription failed: {str(e)}")
+        raise RuntimeError(f"Direct transcription failed: {e}")
+
+
+def transcribe_audio(
+    audio_path: str,
+    job_id: str,
+    confidence_threshold: float = 0.1,
+    progress_callback: Optional[Callable[[int, str], None]] = None
+) -> Dict[str, Any]:
+    """
+    Transcribe audio file to MIDI using YourMT3
+
+    Pipeline (Stem Mode - Default):
+    1. Load and analyze audio file
+    2. Separate into stems (bass, drums, other, vocals) using Demucs
+    3. Process each stem with YourMT3 to generate MIDI
+    4. Return comprehensive analysis results with MIDI URLs
+
+    Pipeline (Direct Mode - BYPASS_DEMUCS=1):
+    1. Load and analyze audio file
+    2. Transcribe full audio directly with YourMT3
+    3. Split MIDI by instruments
+    4. Return comprehensive analysis results
+
+    Set BYPASS_DEMUCS=1 to skip stem separation and transcribe directly.
+    Direct mode is faster but may reduce quality for multi-instrument tracks.
+
+    Args:
+        audio_path: Path to audio file (mp3, wav, flac, m4a)
+        job_id: Unique job identifier for organizing outputs
+        confidence_threshold: Minimum confidence for predictions (0.0-1.0)
+        progress_callback: Optional callback function(progress: int, message: str)
+                          Called with progress percentage and status message
+
+    Returns:
+        Dictionary containing:
+            - song_info: Duration, tempo, beats, etc.
+            - stems: Individual stem MIDI results (empty in direct mode)
+            - instruments: Detected instruments
+            - processing_summary: Stats about processing
+
+    Raises:
+        FileNotFoundError: If audio file not found
+        RuntimeError: If transcription fails
+        ValueError: If model not loaded
+
+    Example:
+        >>> result = transcribe_audio("song.mp3", job_id="abc-123")
+        >>> print(f"Bass MIDI: {result['stems']['bass']['midi_url']}")
+    """
+    # Check if Demucs bypass is enabled
+    bypass_demucs = should_bypass_demucs()
+
+    if bypass_demucs:
+        logger.info("BYPASS_DEMUCS enabled - using direct transcription mode")
+        return transcribe_audio_direct(
+            audio_path=audio_path,
+            job_id=job_id,
+            confidence_threshold=confidence_threshold,
+            progress_callback=progress_callback
+        )
+
+    # Original stem-based pipeline
+    # Validate audio file exists
+    audio_file = Path(audio_path)
+    if not audio_file.exists():
+        raise FileNotFoundError(f"Audio file not found: {audio_path}")
+
+    # Get YourMT3 model instance
+    model = get_yourmt3_model()
+    if model is None:
+        raise ValueError("YourMT3 model not loaded. Initialize model on startup.")
+
+    logger.info(f"Starting transcription with stem separation: {audio_path} (Job: {job_id})")
 
     if progress_callback:
         progress_callback(0, "Starting audio analysis...")

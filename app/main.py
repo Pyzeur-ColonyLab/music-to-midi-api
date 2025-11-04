@@ -120,11 +120,16 @@ async def startup_event():
         # Load YourMT3 model (auto-detects CPU/GPU)
         model = load_yourmt3(device=None)
 
+        # Check bypass mode
+        bypass_demucs = os.getenv('BYPASS_DEMUCS', '0') == '1'
+        processing_mode = "Direct (bypassing Demucs)" if bypass_demucs else "Stem-based (Demucs + YourMT3)"
+
         logger.info("=" * 60)
         logger.info("✅ Music-to-MIDI API Ready!")
         logger.info("=" * 60)
         logger.info(f"   Model: YourMT3 (YPTF.MoE+Multi, 536M params)")
         logger.info(f"   Device: {model.device if hasattr(model, 'device') else 'unknown'}")
+        logger.info(f"   Processing Mode: {processing_mode}")
         logger.info(f"   Capabilities: Audio-to-MIDI transcription")
         logger.info(f"   Supported: Multi-instrument, polyphonic, percussion")
         logger.info("=" * 60)

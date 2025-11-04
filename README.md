@@ -22,6 +22,7 @@ Transform audio files into MIDI with high accuracy using state-of-the-art deep l
 - Automatic 4-stem separation (bass, drums, other, vocals)
 - Independent MIDI generation per stem
 - General MIDI (GM) instrument program assignment
+- **Optional direct mode**: Bypass stem separation for 60% faster processing
 
 🎯 **High Accuracy**
 - YourMT3 YPTF.MoE+Multi model
@@ -30,6 +31,7 @@ Transform audio files into MIDI with high accuracy using state-of-the-art deep l
 
 ⚡ **Production Ready**
 - RESTful API with comprehensive documentation
+- Dual processing modes (stem-based or direct)
 - Health checks and monitoring
 - GPU acceleration support
 
@@ -179,8 +181,9 @@ curl -O http://localhost:8000/api/v1/files/abc-123-def-456_bass.mid
 
 ## Architecture
 
-### Processing Pipeline
+### Processing Pipelines
 
+**Stem-based Mode (Default)**:
 ```
 Audio Input
     ↓
@@ -189,9 +192,20 @@ Audio Input
 ├─ Bass  → [YourMT3] → bass.mid    (GM Programs 32-39)
 ├─ Drums → [YourMT3] → drums.mid   (Percussion track)
 ├─ Other → [YourMT3] → other.mid   (Melodic instruments)
-└─ Vocals → [VAD]    → vocals.mid   (Voice activity only)
+└─ Vocals → [YourMT3] → vocals.mid (Voice transcription)
     ↓
-MIDI Files Output
+MIDI Files Output (per stem)
+```
+
+**Direct Mode (BYPASS_DEMUCS=1)**:
+```
+Audio Input
+    ↓
+[YourMT3 Direct Transcription]
+    ↓
+Single MIDI File → Split by instruments
+    ↓
+MIDI Files Output (per instrument)
 ```
 
 ### Tech Stack
@@ -249,6 +263,9 @@ HOST=0.0.0.0
 # Model
 SKIP_MODEL_LOADING=0  # Set to 1 to skip model loading (testing mode)
 
+# Processing
+BYPASS_DEMUCS=0  # Set to 1 for direct mode (60% faster, no stem separation)
+
 # Security
 ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8000
 
@@ -256,6 +273,23 @@ ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8000
 MAX_UPLOAD_SIZE=100  # MB
 REQUEST_TIMEOUT=600  # seconds
 ```
+
+### Processing Modes
+
+The API supports two processing modes:
+
+**Stem-based Mode (Default)**: `BYPASS_DEMUCS=0`
+- Full pipeline: Demucs separation → YourMT3 per stem
+- Higher accuracy for complex multi-instrument tracks
+- Individual stem MIDI files
+
+**Direct Mode**: `BYPASS_DEMUCS=1`
+- Direct YourMT3 transcription (no stem separation)
+- 60% faster processing time
+- Single unified MIDI with instrument splitting
+- Best for simple arrangements or quick previews
+
+See [BYPASS_DEMUCS.md](docs/BYPASS_DEMUCS.md) for detailed comparison and use cases.
 
 ### GPU Support
 
