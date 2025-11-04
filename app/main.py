@@ -8,6 +8,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 import torch
 import logging
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 from app.api.routes import router
 from app.api.models import ModelInfo, HealthResponse
