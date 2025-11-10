@@ -1,0 +1,56 @@
+# FastAPI framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# MR-MT3 Core Dependencies
+torch>=2.1.0
+torchaudio>=2.1.0
+transformers==4.18.0
+librosa==0.9.1
+note-seq==0.0.3
+pretty-midi==0.2.9
+einops==0.4.1
+
+# NumPy and TensorFlow ecosystem (for MR-MT3)
+numpy>=1.22,<1.24
+tensorflow==2.11.0
+tensorflow-probability==0.19.0
+protobuf==3.20.3
+
+# JAX ecosystem (for MR-MT3 dependencies)
+jax==0.4.20
+jaxlib==0.4.20
+flax==0.6.11
+optax==0.1.7
+clu==0.0.7
+
+# Audio processing
+ddsp==3.6.0
+seqio
+t5==0.9.3
+soundfile
+packaging==20.9
+
+# Stem separation (optional, if keeping Demucs)
+demucs==4.0.1
+
+# YouTube support
+pytube
+yt-dlp
+
+# Data processing
+scipy>=1.10.0
+
+# Utilities
+pydantic==2.4.2
+pydantic-settings==2.0.3
+aiofiles==23.2.1
+python-dotenv>=1.0.0
+
+# Development dependencies
+pytest==7.4.3
+pytest-asyncio==0.21.1
+httpx==0.25.1
+black>=23.0.0
+flake8>=6.0.0
