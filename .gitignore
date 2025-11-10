@@ -71,3 +71,10 @@ temp/
 # FastAPI specific
 __pycache__/
 *.pyc
+
+# Testing scripts
+test_*.py
+*_test.py
+test_*.sh
+minimal_startup_test.py
+sanity_test.py
