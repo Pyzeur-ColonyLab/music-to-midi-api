@@ -20,7 +20,7 @@ from app.api.models import (
     ErrorResponse
 )
 from app.services.transcription import transcribe_audio, get_transcription_stats
-from app.services.yourmt3_service import get_yourmt3_model
+from app.services.mr_mt3_service import get_mr_mt3_service
 
 logger = logging.getLogger(__name__)
 
@@ -117,12 +117,12 @@ async def predict_instruments(job_id: str, request: PredictionRequest = Predicti
             detail=f"Job must be 'uploaded' status, currently '{job['status']}'"
         )
 
-    # Verify model is loaded
-    model = get_yourmt3_model()
-    if model is None:
+    # Verify MR-MT3 model is loaded
+    mr_mt3_service = get_mr_mt3_service()
+    if not mr_mt3_service.model_loaded:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="YourMT3 model not loaded. Service is initializing."
+            detail="MR-MT3 model not loaded. Service is initializing."
         )
 
     # Progress callback to update job status
@@ -138,44 +138,45 @@ async def predict_instruments(job_id: str, request: PredictionRequest = Predicti
     try:
         # Update initial status
         job["status"] = "processing"
-        job["progress"] = 0
-        job["message"] = "Starting analysis..."
+        job["progress"] = 10
+        job["message"] = "Starting MR-MT3 transcription..."
 
-        # Run transcription
-        logger.info(f"Starting transcription for job {job_id}")
-        logger.info(f"   Parameters: confidence={request.confidence_threshold}, onset_tolerance={request.onset_tolerance}, batch_size={request.batch_size}")
-        analysis_result = transcribe_audio(
+        # Prepare output path
+        output_dir = "outputs"
+        os.makedirs(output_dir, exist_ok=True)
+        output_path = os.path.join(output_dir, f"{job_id}.mid")
+
+        # Run MR-MT3 transcription
+        logger.info(f"Starting MR-MT3 transcription for job {job_id}")
+        logger.info(f"   Input: {job['file_path']}")
+        logger.info(f"   Output: {output_path}")
+
+        update_progress(50, "Running MR-MT3 inference...")
+        midi_path = mr_mt3_service.transcribe_audio(
             audio_path=job["file_path"],
-            job_id=job_id,
-            confidence_threshold=request.confidence_threshold,
-            onset_tolerance=request.onset_tolerance,
-            batch_size=request.batch_size,
-            progress_callback=update_progress
+            output_path=output_path
         )
 
         # Update job with results
         job["status"] = "completed"
         job["progress"] = 100
-        job["message"] = "Analysis completed successfully"
-        job["analysis_result"] = analysis_result
+        job["message"] = "Transcription completed successfully"
+        job["midi_path"] = midi_path
 
-        # Extract statistics for response
-        stats = get_transcription_stats(analysis_result)
+        # Get file info for response
+        midi_size = os.path.getsize(midi_path) if os.path.exists(midi_path) else 0
 
-        logger.info(
-            f"Transcription completed for job {job_id}: "
-            f"{stats['total_duration']:.1f}s, {stats['tempo']} BPM, "
-            f"{stats['stems_processed']} stems"
-        )
+        logger.info(f"MR-MT3 transcription completed for job {job_id}")
+        logger.info(f"   MIDI file: {midi_path} ({midi_size} bytes)")
 
         return TranscriptionResponse(
             job_id=job_id,
-            message="Analysis completed successfully with 3-stem models",
-            duration=stats['total_duration'],
-            tempo=stats['tempo'],
-            total_beats=stats['total_beats'],
-            stems_processed=stats['stems_processed'],
-            total_segments=stats['total_segments']
+            message="MR-MT3 transcription completed successfully",
+            duration=0.0,  # MR-MT3 doesn't provide duration in same format
+            tempo=0,
+            total_beats=0,
+            stems_processed=1,
+            total_segments=1
         )
 
     except Exception as e:
