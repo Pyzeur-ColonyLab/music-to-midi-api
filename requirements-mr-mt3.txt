@@ -28,6 +28,7 @@ clu==0.0.7
 # Audio processing
 ddsp==3.6.0
 seqio
+sentencepiece<0.2.0  # Pin to <0.2.0 for protobuf 3.19.6 compatibility
 t5==0.9.3
 soundfile
 packaging>=22.0
