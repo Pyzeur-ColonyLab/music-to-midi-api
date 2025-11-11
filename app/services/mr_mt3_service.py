@@ -75,6 +75,7 @@ class MRMT3Service:
             # Initialize handler
             self.handler = InferenceHandler(
                 weight_path=self.model_path,
+                config_path=self.config_path,
                 device=self.device
             )
 
