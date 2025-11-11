@@ -16,7 +16,7 @@ einops==0.4.1
 numpy>=1.22,<1.24
 tensorflow==2.11.0
 tensorflow-probability==0.19.0
-protobuf==3.20.3
+protobuf==3.19.6
 
 # JAX ecosystem (for MR-MT3 dependencies)
 jax==0.4.20
