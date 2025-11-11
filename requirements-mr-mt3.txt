@@ -30,7 +30,7 @@ ddsp==3.6.0
 seqio
 t5==0.9.3
 soundfile
-packaging==20.9
+packaging>=22.0
 
 # Stem separation (optional, if keeping Demucs)
 demucs==4.0.1
