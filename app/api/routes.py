@@ -259,34 +259,55 @@ async def download_file(filename: str):
         404: If file not found
         400: If file type not allowed
     """
-    # Security: Only allow downloading from uploads directory
+    # Security: Only allow downloading from uploads/outputs directories
     # Prevent path traversal attacks
     safe_filename = os.path.basename(filename)
 
-    # Extract job_id from filename (format: {job_id}_instrument.mid or {job_id}_stem.wav)
+    # Extract job_id from filename
+    # Formats:
+    #  - {job_id}.mid (MR-MT3 direct output)
+    #  - {job_id}_instrument.mid (stem-based output)
+    #  - {job_id}_stem.wav (separated stem audio)
     # Job IDs are UUIDs: 8-4-4-4-12 hex digits
     import re
-    job_id_match = re.match(r'^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})_', safe_filename)
+
+    # Match {job_id}_something or just {job_id}.ext
+    job_id_match = re.match(r'^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:_|\.)', safe_filename)
 
     if job_id_match:
-        # Filename has job_id prefix - search only in that job's directory
+        # Filename has job_id prefix - search in outputs and uploads directories
         job_id = job_id_match.group(1)
-        job_dir = f"uploads/{job_id}"
 
-        # Search only in this job's directory to prevent cross-job file pollution
+        # Search priority: outputs/ (for MIDI) then uploads/ (for stems)
         file_path = None
-        if os.path.exists(job_dir):
-            for root, dirs, files in os.walk(job_dir):
+        search_dirs = ["outputs", f"uploads/{job_id}", "uploads"]
+
+        for search_dir in search_dirs:
+            if not os.path.exists(search_dir):
+                continue
+
+            for root, dirs, files in os.walk(search_dir):
                 if safe_filename in files:
                     file_path = os.path.join(root, safe_filename)
                     break
+
+            if file_path:
+                break
     else:
-        # No job_id prefix - search entire uploads directory (legacy support)
-        uploads_dir = "uploads"
+        # No job_id prefix - search outputs and uploads directories
         file_path = None
-        for root, dirs, files in os.walk(uploads_dir):
-            if safe_filename in files:
-                file_path = os.path.join(root, safe_filename)
+        search_dirs = ["outputs", "uploads"]
+
+        for search_dir in search_dirs:
+            if not os.path.exists(search_dir):
+                continue
+
+            for root, dirs, files in os.walk(search_dir):
+                if safe_filename in files:
+                    file_path = os.path.join(root, safe_filename)
+                    break
+
+            if file_path:
                 break
 
     if not file_path or not os.path.exists(file_path):
