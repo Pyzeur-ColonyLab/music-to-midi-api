@@ -51,6 +51,11 @@ mkdir -p "MR-MT3/config"
 cp config.json MR-MT3/config/mt3_config.json
 echo "✅ Config copied to MR-MT3/config/mt3_config.json"
 
+# Apply our patched inference.py with fixed config path
+echo "🔧 Applying patched inference.py..."
+cp ../../app/services/mr_mt3_patches/inference.py MR-MT3/inference.py
+echo "✅ Patched inference.py deployed"
+
 cd ../..
 
 echo ""
