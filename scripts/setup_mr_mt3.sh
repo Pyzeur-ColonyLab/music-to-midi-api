@@ -45,6 +45,12 @@ else
     echo "⚠️  Configuration already exists"
 fi
 
+# Copy config to MR-MT3 expected location
+echo "📋 Setting up config in MR-MT3 repository..."
+mkdir -p "MR-MT3/config"
+cp config.json MR-MT3/config/mt3_config.json
+echo "✅ Config copied to MR-MT3/config/mt3_config.json"
+
 cd ../..
 
 echo ""

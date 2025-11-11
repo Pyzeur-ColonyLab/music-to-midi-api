@@ -73,9 +73,9 @@ class MRMT3Service:
                 )
 
             # Initialize handler
+            # Note: InferenceHandler expects config at models/mr-mt3/MR-MT3/config/mt3_config.json
             self.handler = InferenceHandler(
                 weight_path=self.model_path,
-                config_path=self.config_path,
                 device=self.device
             )
 
