@@ -388,6 +388,49 @@ ls -lh models/mr-mt3/
 ./scripts/setup_mr_mt3.sh
 ```
 
+### CUDA Error on CPU-only Server
+
+**Error**: `RuntimeError: Found no NVIDIA driver on your system`
+
+**Cause**: The MR-MT3 inference code tries to use CUDA even when configured for CPU mode.
+
+**Solution**: Replace the inference.py file with the patched version:
+
+```bash
+# Stop the API
+kill $(cat logs/api.pid)
+
+# Apply the patch (file already in repository)
+cp app/services/mr_mt3_patches/inference.py models/mr-mt3/MR-MT3/inference.py
+
+# Verify the fix
+grep -A 3 "if self.device == 'cuda'" models/mr-mt3/MR-MT3/inference.py
+
+# Should show:
+# if self.device == 'cuda' and torch.cuda.is_available():
+#     self.model.cuda()
+# else:
+#     self.model.cpu()
+
+# Restart the API
+source venv/bin/activate
+nohup python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 > logs/api.log 2>&1 &
+echo $! > logs/api.pid
+
+# Verify fix worked
+sleep 10
+curl http://localhost:8000/health
+# Should show: "device": "cpu", "gpu_available": false
+```
+
+**Technical Details**:
+- **Fixed File**: `app/services/mr_mt3_patches/inference.py` (line 185-189)
+- **Original Issue**: Hardcoded `self.model.cuda()` call
+- **Fix**: Conditional device handling that respects CPU-only configuration
+- **Commit**: 9b05f9d - "Fix CUDA device handling to support CPU-only deployment"
+
+**Note**: This fix is necessary for CPU-only instances (no NVIDIA GPU). If your server has a GPU and CUDA installed, this fix is harmless and will still use the GPU when available.
+
 ## Production Best Practices
 
 ### 1. Use Process Manager (Alternative to nohup)
