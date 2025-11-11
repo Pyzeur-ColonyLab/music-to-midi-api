@@ -50,10 +50,11 @@ class MRMT3Service:
 
         logger.info(f"🔧 Initializing MR-MT3 Service on device: {self.device}")
 
-        # Add MR-MT3 to path
+        # Add MR-MT3 repository to path
         mr_mt3_dir = os.path.dirname(self.model_path)
-        if os.path.exists(mr_mt3_dir):
-            sys.path.insert(0, mr_mt3_dir)
+        mr_mt3_repo = os.path.join(mr_mt3_dir, "MR-MT3")
+        if os.path.exists(mr_mt3_repo):
+            sys.path.insert(0, mr_mt3_repo)
 
         self.model_loaded = False
         self.handler = None
