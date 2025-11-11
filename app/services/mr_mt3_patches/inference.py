@@ -182,7 +182,11 @@ class InferenceHandler:
                 inputs_tensor = [inputs_tensor]
                 frame_times = [frame_times]
 
-            self.model.cuda()
+            # Respect device configuration instead of forcing CUDA
+            if self.device == 'cuda' and torch.cuda.is_available():
+                self.model.cuda()
+            else:
+                self.model.cpu()
             for idx, batch in enumerate(inputs_tensor):
                 batch = batch.to(self.device)
 
