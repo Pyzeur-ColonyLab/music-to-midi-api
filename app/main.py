@@ -1,6 +1,6 @@
 """
 Music-to-MIDI API Service
-Production API for audio-to-MIDI transcription using YourMT3
+Production API for audio-to-MIDI transcription using MR-MT3
 """
 
 from fastapi import FastAPI, HTTPException
@@ -16,7 +16,7 @@ load_dotenv()
 
 from app.api.routes import router
 from app.api.models import ModelInfo, HealthResponse
-from app.services.yourmt3_service import load_yourmt3, get_yourmt3_model, get_model_info
+from app.services.mr_mt3_service import get_mr_mt3_service
 
 # Configure logging
 logging.basicConfig(
@@ -66,12 +66,18 @@ async def health_check():
 
     Returns system status, model state, and GPU availability
     """
-    model_instance = get_yourmt3_model()
+    try:
+        mr_mt3_service = get_mr_mt3_service()
+        model_loaded = mr_mt3_service.model_loaded if mr_mt3_service else False
+        device = mr_mt3_service.device if mr_mt3_service else "unknown"
+    except Exception:
+        model_loaded = False
+        device = "unknown"
 
     return HealthResponse(
-        status="healthy" if model_instance is not None else "initializing",
-        model_loaded=model_instance is not None,
-        device=str(model_instance.device) if model_instance and hasattr(model_instance, 'device') else "unknown",
+        status="healthy" if model_loaded else "initializing",
+        model_loaded=model_loaded,
+        device=device,
         gpu_available=torch.cuda.is_available(),
         timestamp=datetime.now()
     )
@@ -80,12 +86,13 @@ async def health_check():
 @app.get("/model/info", response_model=ModelInfo, tags=["Model"])
 async def get_model_information():
     """
-    Get information about loaded models
+    Get information about loaded MR-MT3 model
 
-    Returns details about the 3-stem specialized models and their capabilities
+    Returns details about the MR-MT3 model and its capabilities
     """
     try:
-        model_info = get_model_info()
+        mr_mt3_service = get_mr_mt3_service()
+        model_info = mr_mt3_service.get_model_info()
         return ModelInfo(**model_info)
     except RuntimeError as e:
         logger.error(f"Error getting model info: {e}")
@@ -95,9 +102,9 @@ async def get_model_information():
 @app.on_event("startup")
 async def startup_event():
     """
-    Initialize YourMT3 model on startup
+    Initialize MR-MT3 model on startup
 
-    Loads YourMT3 for audio-to-MIDI transcription
+    Loads MR-MT3 for audio-to-MIDI transcription
 
     Set SKIP_MODEL_LOADING=1 to start API without loading models (for testing)
     """
@@ -120,23 +127,19 @@ async def startup_event():
         logger.info("🚀 Starting Music-to-MIDI API Service")
         logger.info("=" * 60)
 
-        logger.info("📦 Initializing YourMT3 model...")
+        logger.info("📦 Initializing MR-MT3 model...")
 
-        # Load YourMT3 model (auto-detects CPU/GPU)
-        model = load_yourmt3(device=None)
-
-        # Check bypass mode
-        bypass_demucs = os.getenv('BYPASS_DEMUCS', '0') == '1'
-        processing_mode = "Hybrid (Demucs stems + YourMT3 on full audio)" if bypass_demucs else "Stem-based (Demucs + YourMT3 per stem)"
+        # Load MR-MT3 model (auto-detects CPU/GPU)
+        mr_mt3_service = get_mr_mt3_service()
 
         logger.info("=" * 60)
         logger.info("✅ Music-to-MIDI API Ready!")
         logger.info("=" * 60)
-        logger.info(f"   Model: YourMT3 (YPTF.MoE+Multi, 536M params)")
-        logger.info(f"   Device: {model.device if hasattr(model, 'device') else 'unknown'}")
-        logger.info(f"   Processing Mode: {processing_mode}")
-        logger.info(f"   Capabilities: Audio-to-MIDI transcription")
-        logger.info(f"   Supported: Multi-instrument, polyphonic, percussion")
+        logger.info(f"   Model: MR-MT3 (Memory Retaining Multi-Track Music Transcription)")
+        logger.info(f"   Device: {mr_mt3_service.device}")
+        logger.info(f"   Model Path: {mr_mt3_service.model_path}")
+        logger.info(f"   Capabilities: Multi-track MIDI generation with reduced leakage")
+        logger.info(f"   Features: Memory retention, multi-instrument separation")
         logger.info("=" * 60)
         logger.info("📖 API Documentation: http://localhost:8000/docs")
         logger.info("🏥 Health Check: http://localhost:8000/health")
@@ -144,10 +147,11 @@ async def startup_event():
 
     except Exception as e:
         logger.error("=" * 60)
-        logger.error(f"❌ Failed to initialize YourMT3 model: {e}")
+        logger.error(f"❌ Failed to initialize MR-MT3 model: {e}")
         logger.error("=" * 60)
         logger.error("Service will start but model endpoints will return 503 errors")
-        logger.error("Check that YourMT3 checkpoint exists in MT3/yourmt3_space/")
+        logger.error("Check that MR-MT3 model exists at models/mr-mt3/mt3.pth")
+        logger.error("Run setup script: ./scripts/setup_mr_mt3.sh")
         logger.error("=" * 60)
 
 
