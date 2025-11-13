@@ -44,7 +44,7 @@ app.add_middleware(
 )
 
 # Include API routes
-app.include_router(router, prefix="/api/v1", tags=["Music-to-MIDI"])
+app.include_router(router, prefix="", tags=["Music-to-MIDI"])
 
 
 @app.get("/", tags=["Health"])

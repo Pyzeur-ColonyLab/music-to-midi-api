@@ -162,6 +162,37 @@ async def predict_instruments(job_id: str, request: PredictionRequest = Predicti
         job["progress"] = 100
         job["message"] = "Transcription completed successfully"
         job["midi_path"] = midi_path
+        # Update job with results
+        job["status"] = "completed"
+        job["progress"] = 100
+        job["message"] = "Transcription completed successfully"
+        job["midi_path"] = midi_path
+
+        # Add analysis_result for /results/ endpoint
+        job["analysis_result"] = {
+            "song_info": {
+                "duration": 0.0,
+                "tempo": 0,
+                "total_beats": 0
+            },
+            "stems": {},
+            "instruments": [{
+                "instrument_name": "full_mix",
+                "midi_path": midi_path,
+                "midi_filename": os.path.basename(midi_path),
+                "confidence": 1.0,
+                "family": "mixed",
+                "program": 0,
+                "source_stem": "full_mix",
+                "note_count": 0,
+                "duration": 0.0
+            }],
+            "processing_summary": {
+                "stems_processed": 1,
+                "total_segments": 1,
+                "midi_generated": True
+            }
+        }
 
         # Get file info for response
         midi_size = os.path.getsize(midi_path) if os.path.exists(midi_path) else 0
