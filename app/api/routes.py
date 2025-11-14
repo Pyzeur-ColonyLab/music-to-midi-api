@@ -21,6 +21,7 @@ from app.api.models import (
 )
 from app.services.transcription import transcribe_audio, get_transcription_stats
 from app.services.mr_mt3_service import get_mr_mt3_service
+from app.services.hybrid_transcription import transcribe_audio_hybrid
 
 logger = logging.getLogger(__name__)
 
@@ -138,45 +139,42 @@ async def predict_instruments(job_id: str, request: PredictionRequest = Predicti
     try:
         # Update initial status
         job["status"] = "processing"
-        job["progress"] = 10
-        job["message"] = "Starting MR-MT3 transcription..."
+        job["progress"] = 5
+        job["message"] = "Starting hybrid transcription pipeline..."
 
-        # Prepare output path
-        output_dir = "outputs"
-        os.makedirs(output_dir, exist_ok=True)
-        output_path = os.path.join(output_dir, f"{job_id}.mid")
-
-        # Run MR-MT3 transcription
-        logger.info(f"Starting MR-MT3 transcription for job {job_id}")
+        # Run hybrid transcription pipeline
+        # Pipeline: Demucs (stems) → MR-MT3 (full audio) → Instrument splitting
+        logger.info(f"Starting hybrid transcription for job {job_id}")
         logger.info(f"   Input: {job['file_path']}")
-        logger.info(f"   Output: {output_path}")
 
-        update_progress(50, "Running MR-MT3 inference...")
-        midi_path = mr_mt3_service.transcribe_audio(
+        result = transcribe_audio_hybrid(
             audio_path=job["file_path"],
-            output_path=output_path
+            job_id=job_id,
+            progress_callback=update_progress
         )
 
         # Update job with results
         job["status"] = "completed"
         job["progress"] = 100
         job["message"] = "Transcription completed successfully"
-        job["midi_path"] = midi_path
+        job["analysis_result"] = result
 
-        # Get file info for response
-        midi_size = os.path.getsize(midi_path) if os.path.exists(midi_path) else 0
+        # Extract summary data for response
+        song_info = result.get("song_info", {})
+        processing_summary = result.get("processing_summary", {})
 
-        logger.info(f"MR-MT3 transcription completed for job {job_id}")
-        logger.info(f"   MIDI file: {midi_path} ({midi_size} bytes)")
+        logger.info(f"Hybrid transcription completed for job {job_id}")
+        logger.info(f"   Stems: {processing_summary.get('stems_processed', 0)}")
+        logger.info(f"   Instruments: {processing_summary.get('total_instruments', 0)}")
 
         return TranscriptionResponse(
             job_id=job_id,
-            message="MR-MT3 transcription completed successfully",
-            duration=0.0,  # MR-MT3 doesn't provide duration in same format
-            tempo=0,
-            total_beats=0,
-            stems_processed=1,
-            total_segments=1
+            message="Hybrid transcription completed successfully",
+            duration=song_info.get("duration", 0.0),
+            tempo=int(song_info.get("tempo", 0)),
+            total_beats=song_info.get("total_beats", 0),
+            stems_processed=processing_summary.get("stems_processed", 0),
+            total_segments=processing_summary.get("total_instruments", 0)
         )
 
     except Exception as e:
@@ -239,6 +237,7 @@ async def get_results(job_id: str):
         job_id=job_id,
         song_info=result.get("song_info", {}),
         stems=result.get("stems", {}),
+        fullmix_midi=result.get("fullmix_midi"),
         instruments=result.get("instruments", []),
         processing_summary=result.get("processing_summary", {})
     )

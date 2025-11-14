@@ -17,6 +17,7 @@ load_dotenv()
 from app.api.routes import router
 from app.api.models import ModelInfo, HealthResponse
 from app.services.mr_mt3_service import get_mr_mt3_service
+from app.services.hybrid_transcription import preload_models
 
 # Configure logging
 logging.basicConfig(
@@ -28,8 +29,8 @@ logger = logging.getLogger(__name__)
 # Create FastAPI application
 app = FastAPI(
     title="Music-to-MIDI API",
-    description="AI-powered audio-to-MIDI transcription with stem-based processing",
-    version="1.0.0",
+    description="AI-powered audio-to-MIDI transcription with hybrid pipeline: Demucs stem separation + MR-MT3 transcription",
+    version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
 )
@@ -44,7 +45,7 @@ app.add_middleware(
 )
 
 # Include API routes
-app.include_router(router, prefix="/api/v1", tags=["Music-to-MIDI"])
+app.include_router(router, prefix="", tags=["Music-to-MIDI"])
 
 
 @app.get("/", tags=["Health"])
@@ -124,22 +125,27 @@ async def startup_event():
 
     try:
         logger.info("=" * 60)
-        logger.info("🚀 Starting Music-to-MIDI API Service")
+        logger.info("🚀 Starting Music-to-MIDI API Service (Hybrid Pipeline)")
         logger.info("=" * 60)
 
-        logger.info("📦 Initializing MR-MT3 model...")
+        logger.info("📦 Initializing Hybrid Pipeline Models...")
+        logger.info("   - Demucs (4-stem separation)")
+        logger.info("   - MR-MT3 (Multi-track MIDI transcription)")
 
-        # Load MR-MT3 model (auto-detects CPU/GPU)
+        # Preload both Demucs and MR-MT3 models
+        preload_models()
+
+        # Get MR-MT3 service for device info
         mr_mt3_service = get_mr_mt3_service()
 
         logger.info("=" * 60)
-        logger.info("✅ Music-to-MIDI API Ready!")
+        logger.info("✅ Music-to-MIDI API Ready (Hybrid Pipeline)!")
         logger.info("=" * 60)
-        logger.info(f"   Model: MR-MT3 (Memory Retaining Multi-Track Music Transcription)")
+        logger.info(f"   Pipeline: Demucs → MR-MT3 → Instrument Splitting")
+        logger.info(f"   Separator: Demucs htdemucs (4-stem)")
+        logger.info(f"   Transcriber: MR-MT3 (Memory Retaining Multi-Track)")
         logger.info(f"   Device: {mr_mt3_service.device}")
-        logger.info(f"   Model Path: {mr_mt3_service.model_path}")
-        logger.info(f"   Capabilities: Multi-track MIDI generation with reduced leakage")
-        logger.info(f"   Features: Memory retention, multi-instrument separation")
+        logger.info(f"   Outputs: Stem WAVs + Full MIDI + Per-instrument MIDIs")
         logger.info("=" * 60)
         logger.info("📖 API Documentation: http://localhost:8000/docs")
         logger.info("🏥 Health Check: http://localhost:8000/health")
@@ -147,11 +153,12 @@ async def startup_event():
 
     except Exception as e:
         logger.error("=" * 60)
-        logger.error(f"❌ Failed to initialize MR-MT3 model: {e}")
+        logger.error(f"❌ Failed to initialize hybrid pipeline models: {e}")
         logger.error("=" * 60)
         logger.error("Service will start but model endpoints will return 503 errors")
-        logger.error("Check that MR-MT3 model exists at models/mr-mt3/mt3.pth")
-        logger.error("Run setup script: ./scripts/setup_mr_mt3.sh")
+        logger.error("Check model requirements:")
+        logger.error("  - Demucs: pip install demucs")
+        logger.error("  - MR-MT3: model at models/mr-mt3/mt3.pth")
         logger.error("=" * 60)
 
 
