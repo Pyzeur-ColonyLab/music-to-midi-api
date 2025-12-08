@@ -3,7 +3,7 @@ API Routes
 FastAPI endpoint definitions
 """
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, status
+from fastapi import APIRouter, UploadFile, File, HTTPException, status, Header
 from fastapi.responses import FileResponse
 from typing import Dict, Any
 import os
@@ -244,23 +244,66 @@ async def get_results(job_id: str):
 
 
 @router.get("/files/{filename}")
-async def download_file(filename: str):
+async def download_file(
+    filename: str,
+    api_key: str = Header(None, alias="X-API-Key")
+):
     """
     Download generated MIDI or audio stem file
 
     Args:
         filename: Name of the file to download (e.g., {job_id}_bass.mid or {job_id}_bass.wav)
+        api_key: API key for authentication (required)
 
     Returns:
         MIDI or WAV file for download
 
     Raises:
+        401: If API key is missing or invalid
         404: If file not found
-        400: If file type not allowed
+        400: If file type not allowed or filename invalid
     """
-    # Security: Only allow downloading from uploads/outputs directories
-    # Prevent path traversal attacks
+    # Security: Verify API key
+    from app.core.config import settings
+    expected_api_key = getattr(settings, 'API_KEY', None)
+
+    if not expected_api_key or api_key != expected_api_key:
+        logger.warning(f"Unauthorized file download attempt: {filename}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing API key"
+        )
+
+    # Security: Strict filename validation - only allow safe characters
+    # Pattern: alphanumeric, hyphens, underscores, dots
+    # Must match UUID pattern for job IDs
+    import re
+    if not re.match(r'^[a-zA-Z0-9_\-\.]+$', filename):
+        logger.warning(f"Invalid filename characters detected: {filename}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid filename: only alphanumeric characters, hyphens, underscores, and dots allowed"
+        )
+
+    # Security: Validate file extension FIRST (before filesystem operations)
+    file_ext = os.path.splitext(filename)[1].lower()
+    allowed_extensions = ['.mid', '.wav']
+
+    if file_ext not in allowed_extensions:
+        logger.warning(f"Disallowed file extension requested: {filename}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Only MIDI (.mid) and WAV (.wav) files can be downloaded"
+        )
+
+    # Security: Prevent path traversal - verify basename matches original
     safe_filename = os.path.basename(filename)
+    if safe_filename != filename:
+        logger.error(f"Path traversal attempt detected: {filename}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid filename: path traversal detected"
+        )
 
     # Extract job_id from filename
     # Formats:
@@ -310,22 +353,13 @@ async def download_file(filename: str):
                 break
 
     if not file_path or not os.path.exists(file_path):
+        logger.warning(f"File not found: {filename}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"File not found: {filename}"
         )
 
-    # Verify it's an allowed file type (MIDI or WAV)
-    file_ext = os.path.splitext(file_path)[1].lower()
-    allowed_extensions = ['.mid', '.wav']
-
-    if file_ext not in allowed_extensions:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Only MIDI (.mid) and WAV (.wav) files can be downloaded"
-        )
-
-    # Determine media type based on extension
+    # Determine media type based on extension (already validated above)
     if file_ext == '.wav':
         media_type = "audio/wav"
     elif file_ext == '.mid':
